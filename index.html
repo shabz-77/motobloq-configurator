@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Bentley Configurator</title>
+<link rel="icon" type="image/png" href="favicon.png" />
+
+<!-- ✅ Disable browser zoom & stabilize viewport -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+<style>
+  /* ✅ Base Layout */
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100vh; /* full viewport height */
+    background: black;
+    overflow: hidden;
+    font-family: sans-serif;
+  }
+
+  /* ✅ Stream Container (keeps aspect ratio) */
+  #stream-container {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+    overflow: hidden;
+  }
+  #stream-container video, #player {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  /* ✅ Share Button */
+  #shareBtn {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 9999;
+    padding: 10px 16px;
+    background: rgba(255,255,255,0.12);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+  }
+  #shareBtn:hover { background: rgba(255,255,255,0.25); }
+
+  /* ✅ Toast Notification */
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    right: 50%;
+    transform: translateX(50%);
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 10px 18px;
+    border-radius: 6px;
+    display: none;
+    z-index: 99999;
+  }
+
+  /* ✅ Loading Screen Overlay */
+  #loading-screen {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    background: black;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+  }
+  #loading-screen img {
+    width: 70%;
+    max-width: 900px;
+    height: auto;
+    border-radius: 8px;
+    margin-bottom: 20px;
+  }
+  #close-loading {
+    background: rgba(255,255,255,0.15);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  #close-loading:hover { background: rgba(255,255,255,0.3); }
+</style>
+
+<script type="module">
+  import * as ArcwareSDK from "https://unpkg.com/@arcware-cloud/pixelstreaming-websdk@latest/index.esm.js";
+  const { ArcwareInit } = ArcwareSDK;
+
+  /* --------------------------------------------------------------------------
+     ✅ INITIAL SETUP
+  -------------------------------------------------------------------------- */
+  let configState = JSON.parse(localStorage.getItem("userSpec") || "{}");
+
+  const hasSpec = window.location.search.length > 1;
+  if (!hasSpec) {
+    configState = {};
+    localStorage.removeItem("userSpec");
+  }
+
+  // ✅ Init Pixel Streaming
+  const { Application, PixelStreaming } = ArcwareInit(
+    { shareId: "share-789c771a-f254-4ef2-964f-471477e45529" },
+    {
+      initialSettings: {
+        AutoConnect: true,
+        AutoPlayVideo: true,
+        StartVideoMuted: true,
+        TouchInput: true,
+      },
+      settings: {
+        fullscreenButton: false,
+        settingsButton: false,
+        infoButton: false,
+        audioButton: false,
+        micButton: false,
+        connectionStrengthIcon: false,
+      },
+    }
+  );
+
+  // ✅ Mount stream
+  const container = document.getElementById("stream-container");
+  if (container && Application?.rootElement) {
+    container.appendChild(Application.rootElement);
+  }
+
+  /* --------------------------------------------------------------------------
+     ✅ HANDLE UE → WEB CONFIG UPDATES (GUARDED)
+  -------------------------------------------------------------------------- */
+  const ALLOWED = /^VS_/;
+
+  Application.getApplicationResponse((response) => {
+    try {
+      const d = JSON.parse(response);
+      if (d && ALLOWED.test(d.action) && d.value && d.value !== "None") {
+        configState[d.action] = d.value;
+        localStorage.setItem("userSpec", JSON.stringify(configState));
+        console.log("✅ Saved:", d.action, "=", d.value);
+      } else {
+        console.log("⏭️ Ignored:", d);
+      }
+    } catch {
+      console.warn("⚠️ Ignored non-JSON message:", response);
+    }
+  });
+
+  /* --------------------------------------------------------------------------
+     ✅ SHARE + LOAD LOGIC
+  -------------------------------------------------------------------------- */
+  // ✅ Share button logic (copy link + email)
+  window.shareBuild = () => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(configState)) {
+      params.append(key, value);
+    }
+    const shareURL = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+    navigator.clipboard.writeText(shareURL).then(() => {
+      showToast("✅ Link copied!");
+
+      // ✅ Direct email trigger
+      const subject = encodeURIComponent("New Configurator Submission");
+      const body = encodeURIComponent(`Here's my configuration: ${shareURL}`);
+      window.location.href = `mailto:renders@motobloq.com?subject=${subject}&body=${body}`;
+
+      console.log("🔗 Share URL (emailed):", shareURL);
+    });
+  };
+
+  // ✅ Load config from URL
+  window.addEventListener("load", () => {
+    const params = new URLSearchParams(window.location.search);
+    const loadedConfig = {};
+    params.forEach((value, key) => (loadedConfig[key] = value));
+
+    if (Object.keys(loadedConfig).length === 0) {
+      console.log("ℹ️ No config in URL");
+      return;
+    }
+
+    configState = { ...loadedConfig };
+    localStorage.setItem("userSpec", JSON.stringify(configState));
+
+    console.log("🔗 Found config in URL:", loadedConfig);
+
+    PixelStreaming.videoInitializedHandler.add(() => {
+      console.log("📺 Stream video started...");
+      setTimeout(() => {
+        console.log("✅ Stream Ready — Applying config...");
+        let delay = 0;
+        const delayStep = 300;
+        Object.entries(loadedConfig).forEach(([action, value]) => {
+          setTimeout(() => {
+            console.log(`📤 Sending: ${action} = ${value}`);
+            Application.emitUIInteraction({ action, value });
+          }, delay);
+          delay += delayStep;
+        });
+      }, 4000);
+    });
+  });
+
+  // ✅ Toast notification
+  function showToast(msg) {
+    const toast = document.getElementById("toast");
+    toast.innerText = msg;
+    toast.style.display = "block";
+    setTimeout(() => (toast.style.display = "none"), 2000);
+  }
+
+  /* --------------------------------------------------------------------------
+     ✅ 3. Hide Loading Screen when Stream is Ready
+  -------------------------------------------------------------------------- */
+  PixelStreaming.videoInitializedHandler.add(() => {
+    const loader = document.getElementById("loading-screen");
+    if (loader) loader.style.display = "none";
+  });
+
+  // Allow manual close
+  window.closeLoading = () => {
+    document.getElementById("loading-screen").style.display = "none";
+  };
+</script>
+
+<!-- ✅ Vercel Analytics -->
+<script>
+  window.va = window.va || function () {
+    (window.vaq = window.vaq || []).push(arguments);
+  };
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
+<!-- ✅ End of Vercel Analytics -->
+
+</head>
+
+<body>
+  <!-- ✅ Loading Screen -->
+  <div id="loading-screen">
+    <img src="loading-screen.png" alt="Loading Configuration" />
+    <button id="close-loading" onclick="closeLoading()">Enter Experience</button>
+  </div>
+
+  <div id="stream-container"></div>
+  <button id="shareBtn" onclick="shareBuild()">Share Build</button>
+  <div id="toast"></div>
+</body>
+</html>

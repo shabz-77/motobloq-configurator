@@ -1,0 +1,252 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.unmockRTCPeerConnection = exports.mockRTCPeerConnection = exports.MockRTCTrackEventImpl = exports.MockRTCDataChannelEventImpl = exports.MockRTCDataChannelImpl = exports.MockRTCIceCandidateImpl = exports.MockRTCPeerConnectionImpl = void 0;
+const spyFunctions = {
+    constructorSpy: null,
+    closeSpy: null,
+    setRemoteDescriptionSpy: null,
+    setLocalDescriptionSpy: null,
+    createAnswerSpy: null,
+    addTransceiverSpy: null,
+    addIceCandidateSpy: null,
+    sendDataSpy: null,
+};
+const triggerFunctions = {
+    triggerIceConnectionStateChange: null,
+    triggerOnTrack: null,
+    triggerOnIceCandidate: null,
+    triggerOnDataChannel: null
+};
+class MockRTCPeerConnectionImpl {
+    constructor(config) {
+        var _a;
+        this._dataChannels = [];
+        this.connectionState = "new";
+        this.iceConnectionState = "new";
+        (_a = spyFunctions.constructorSpy) === null || _a === void 0 ? void 0 : _a.call(spyFunctions, config);
+        triggerFunctions.triggerIceConnectionStateChange = this.triggerIceConnectionStateChange.bind(this);
+        triggerFunctions.triggerOnTrack = this.triggerOnTrack.bind(this);
+        triggerFunctions.triggerOnIceCandidate = this.triggerOnIceCandidate.bind(this);
+        triggerFunctions.triggerOnDataChannel =
+            this.triggerOnDataChannel.bind(this);
+    }
+    addIceCandidate(candidate, successCallback, failureCallback) {
+        var _a, _b;
+        if (this.iceConnectionState !== "connected" && this.iceConnectionState !== "completed") {
+            this.iceConnectionState = "checking";
+        }
+        (_a = this.oniceconnectionstatechange) === null || _a === void 0 ? void 0 : _a.call(this, new Event("iceconnectionstatechange"));
+        (_b = spyFunctions.addIceCandidateSpy) === null || _b === void 0 ? void 0 : _b.call(spyFunctions, candidate);
+        return Promise.resolve();
+    }
+    addTrack(track, ...streams) {
+        throw new Error("Method not implemented.");
+    }
+    addTransceiver(trackOrKind, init) {
+        var _a;
+        (_a = spyFunctions.addTransceiverSpy) === null || _a === void 0 ? void 0 : _a.call(spyFunctions, trackOrKind, init);
+        return {};
+    }
+    createAnswer(successCallback, failureCallback) {
+        var _a;
+        (_a = spyFunctions.createAnswerSpy) === null || _a === void 0 ? void 0 : _a.call(spyFunctions);
+        const res = {
+            type: "answer",
+            sdp: "v=0\r\no=- 5791786663981007547 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0 1 2\r\na=extmap-allow-mixed\r\na=msid-semantic: WMS\r\nm=video 9 UDP/TLS/RTP/SAVPF 96 98\r\nc=IN IP4 0.0.0.0\r\na=rtcp:9 IN IP4 0.0.0.0\r\na=ice-ufrag:z0li\r\na=ice-pwd:DkbG5Q3dFSIygDc47cms4TGA\r\na=ice-options:trickle\r\na=fingerprint:sha-256 F9:5B:3C:AB:89:88:0E:1B:2E:63:B3:D2:B8:92:59:E2:3A:46:B6:85:09:F4:50:0E:72:4F:9F:70:6D:5F:BD:1A\r\na=setup:active\r\na=mid:0\r\na=extmap:1 urn:ietf:params:rtp-hdrext:toffset\r\na=extmap:2 http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time\r\na=extmap:3 urn:3gpp:video-orientation\r\na=extmap:4 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01\r\na=extmap:5 http://www.webrtc.org/experiments/rtp-hdrext/playout-delay\r\na=extmap:6 http://www.webrtc.org/experiments/rtp-hdrext/video-content-type\r\na=extmap:7 http://www.webrtc.org/experiments/rtp-hdrext/video-timing\r\na=extmap:8 http://www.webrtc.org/experiments/rtp-hdrext/color-space\r\na=extmap:9 urn:ietf:params:rtp-hdrext:sdes:mid\r\na=extmap:10 urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id\r\na=extmap:11 urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id\r\na=recvonly\r\na=rtcp-mux\r\na=rtcp-rsize\r\na=rtpmap:96 H264/90000\r\na=rtcp-fb:96 goog-remb\r\na=rtcp-fb:96 transport-cc\r\na=rtcp-fb:96 ccm fir\r\na=rtcp-fb:96 nack\r\na=rtcp-fb:96 nack pli\r\na=fmtp:96 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f\r\na=rtpmap:98 H264/90000\r\na=rtcp-fb:98 goog-remb\r\na=rtcp-fb:98 transport-cc\r\na=rtcp-fb:98 ccm fir\r\na=rtcp-fb:98 nack\r\na=rtcp-fb:98 nack pli\r\na=fmtp:98 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111 63 110\r\nc=IN IP4 0.0.0.0\r\na=rtcp:9 IN IP4 0.0.0.0\r\na=ice-ufrag:z0li\r\na=ice-pwd:DkbG5Q3dFSIygDc47cms4TGA\r\na=ice-options:trickle\r\na=fingerprint:sha-256 F9:5B:3C:AB:89:88:0E:1B:2E:63:B3:D2:B8:92:59:E2:3A:46:B6:85:09:F4:50:0E:72:4F:9F:70:6D:5F:BD:1A\r\na=setup:active\r\na=mid:1\r\na=extmap:14 urn:ietf:params:rtp-hdrext:ssrc-audio-level\r\na=extmap:2 http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time\r\na=extmap:4 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01\r\na=extmap:9 urn:ietf:params:rtp-hdrext:sdes:mid\r\na=recvonly\r\na=rtcp-mux\r\na=rtpmap:111 opus/48000/2\r\na=rtcp-fb:111 transport-cc\r\na=fmtp:111 minptime=10;useinbandfec=1\r\na=rtpmap:63 red/48000/2\r\na=fmtp:63 111/111\r\na=rtpmap:110 telephone-event/48000\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\nc=IN IP4 0.0.0.0\r\na=ice-ufrag:z0li\r\na=ice-pwd:DkbG5Q3dFSIygDc47cms4TGA\r\na=ice-options:trickle\r\na=fingerprint:sha-256 F9:5B:3C:AB:89:88:0E:1B:2E:63:B3:D2:B8:92:59:E2:3A:46:B6:85:09:F4:50:0E:72:4F:9F:70:6D:5F:BD:1A\r\na=setup:active\r\na=mid:2\r\na=sctp-port:5000\r\na=max-message-size:262144\r\n"
+        };
+        return Promise.resolve(res);
+    }
+    createDataChannel(label, dataChannelDict) {
+        const dataChannel = new RTCDataChannel();
+        this._dataChannels.push(dataChannel);
+        return dataChannel;
+    }
+    createOffer(successCallback, failureCallback, options) {
+        throw new Error("Method not implemented.");
+    }
+    getConfiguration() {
+        throw new Error("Method not implemented.");
+    }
+    getReceivers() {
+        return [];
+    }
+    getSenders() {
+        throw new Error("Method not implemented.");
+    }
+    getStats(selector) {
+        const stats = {
+            forEach: function (callbackfn) {
+                callbackfn({
+                    type: 'candidate-pair',
+                    bytesReceived: 123,
+                });
+                callbackfn({
+                    type: 'local-candidate',
+                    address: 'mock-address',
+                });
+            },
+        };
+        return Promise.resolve(stats);
+    }
+    getTransceivers() {
+        return [];
+    }
+    removeTrack(sender) {
+        throw new Error("Method not implemented.");
+    }
+    restartIce() {
+        throw new Error("Method not implemented.");
+    }
+    setConfiguration(configuration) {
+        throw new Error("Method not implemented.");
+    }
+    setLocalDescription(description, successCallback, failureCallback) {
+        var _a;
+        (_a = spyFunctions.setLocalDescriptionSpy) === null || _a === void 0 ? void 0 : _a.call(spyFunctions, description);
+        return Promise.resolve();
+    }
+    setRemoteDescription(description, successCallback, failureCallback) {
+        var _a;
+        (_a = spyFunctions.setRemoteDescriptionSpy) === null || _a === void 0 ? void 0 : _a.call(spyFunctions, description);
+        return Promise.resolve();
+    }
+    addEventListener(type, listener, options) {
+        throw new Error("Method not implemented.");
+    }
+    removeEventListener(type, listener, options) {
+        throw new Error("Method not implemented.");
+    }
+    dispatchEvent(event) {
+        throw new Error("Method not implemented.");
+    }
+    static generateCertificate(keygenAlgorithm) {
+        throw new Error("Method not implemented.");
+    }
+    close() {
+        var _a, _b, _c;
+        this.connectionState = "closed";
+        this.iceConnectionState = "closed";
+        (_a = this.onconnectionstatechange) === null || _a === void 0 ? void 0 : _a.call(this, new Event(this.connectionState));
+        (_b = this.oniceconnectionstatechange) === null || _b === void 0 ? void 0 : _b.call(this, new Event(this.iceConnectionState));
+        this._dataChannels.forEach((channel) => channel.close());
+        (_c = spyFunctions.closeSpy) === null || _c === void 0 ? void 0 : _c.call(spyFunctions);
+    }
+    triggerIceConnectionStateChange(state) {
+        var _a;
+        this.iceConnectionState = state;
+        const event = new Event(state);
+        (_a = this.oniceconnectionstatechange) === null || _a === void 0 ? void 0 : _a.call(this, event);
+    }
+    triggerOnTrack(data) {
+        var _a;
+        const event = new RTCTrackEvent('track', data);
+        (_a = this.ontrack) === null || _a === void 0 ? void 0 : _a.call(this, event);
+    }
+    triggerOnIceCandidate(data) {
+        var _a;
+        const event = new RTCPeerConnectionIceEvent('icecandidate', data);
+        (_a = this.onicecandidate) === null || _a === void 0 ? void 0 : _a.call(this, event);
+    }
+    triggerOnDataChannel(data) {
+        var _a;
+        this._dataChannels.push(data.channel);
+        const event = new RTCDataChannelEvent('datachannel', data);
+        (_a = this.ondatachannel) === null || _a === void 0 ? void 0 : _a.call(this, event);
+    }
+}
+exports.MockRTCPeerConnectionImpl = MockRTCPeerConnectionImpl;
+class MockRTCIceCandidateImpl {
+    constructor(options) {
+        this.candidate = (options === null || options === void 0 ? void 0 : options.candidate) || "";
+        this.sdpMid = (options === null || options === void 0 ? void 0 : options.sdpMid) || null;
+        this.sdpMLineIndex = (options === null || options === void 0 ? void 0 : options.sdpMLineIndex) || null;
+        this.usernameFragment = (options === null || options === void 0 ? void 0 : options.usernameFragment) || null;
+    }
+    toJSON() {
+        throw new Error("Method not implemented.");
+    }
+}
+exports.MockRTCIceCandidateImpl = MockRTCIceCandidateImpl;
+class MockRTCDataChannelImpl {
+    constructor() {
+        this.readyState = "open";
+    }
+    close() {
+        var _a;
+        (_a = this.onclose) === null || _a === void 0 ? void 0 : _a.call(this, new Event('close'));
+    }
+    send(data) {
+        var _a;
+        (_a = spyFunctions.sendDataSpy) === null || _a === void 0 ? void 0 : _a.call(spyFunctions, data);
+    }
+    addEventListener(type, listener, options) {
+        throw new Error("Method not implemented.");
+    }
+    removeEventListener(type, listener, options) {
+        throw new Error("Method not implemented.");
+    }
+    dispatchEvent(event) {
+        var _a;
+        if (event.type === 'message') {
+            (_a = this.onmessage) === null || _a === void 0 ? void 0 : _a.call(this, event);
+        }
+        return true;
+    }
+}
+exports.MockRTCDataChannelImpl = MockRTCDataChannelImpl;
+class MockRTCDataChannelEventImpl extends Event {
+    constructor(name, data) {
+        super(name, data);
+        this.channel = data.channel;
+    }
+}
+exports.MockRTCDataChannelEventImpl = MockRTCDataChannelEventImpl;
+class MockRTCTrackEventImpl extends Event {
+    constructor(name, data) {
+        super(name, data);
+        this.receiver = data.receiver;
+        this.streams = data.streams || [];
+        this.track = data.track;
+        this.transceiver = data.transceiver;
+    }
+}
+exports.MockRTCTrackEventImpl = MockRTCTrackEventImpl;
+const originalRTCPeerConnection = global.RTCPeerConnection;
+const originalRTCIceCandidate = global.RTCIceCandidate;
+const originalRTCDataChannel = global.RTCDataChannel;
+const originalRTCDataChannelEvent = global.RTCDataChannelEvent;
+const originalRTCTrackEvent = global.RTCTrackEvent;
+const mockRTCPeerConnection = () => {
+    spyFunctions.constructorSpy = jest.fn();
+    spyFunctions.closeSpy = jest.fn();
+    spyFunctions.setRemoteDescriptionSpy = jest.fn();
+    spyFunctions.setLocalDescriptionSpy = jest.fn();
+    spyFunctions.createAnswerSpy = jest.fn();
+    spyFunctions.addTransceiverSpy = jest.fn();
+    spyFunctions.addIceCandidateSpy = jest.fn();
+    spyFunctions.sendDataSpy = jest.fn();
+    global.RTCPeerConnection = MockRTCPeerConnectionImpl;
+    global.RTCIceCandidate = MockRTCIceCandidateImpl;
+    global.RTCDataChannel = MockRTCDataChannelImpl;
+    global.RTCDataChannelEvent = MockRTCDataChannelEventImpl;
+    global.RTCTrackEvent = MockRTCTrackEventImpl;
+    return [spyFunctions, triggerFunctions];
+};
+exports.mockRTCPeerConnection = mockRTCPeerConnection;
+const unmockRTCPeerConnection = () => {
+    global.RTCPeerConnection = originalRTCPeerConnection;
+    global.RTCIceCandidate = originalRTCIceCandidate;
+    global.RTCDataChannel = originalRTCDataChannel;
+    global.RTCDataChannelEvent = originalRTCDataChannelEvent;
+    global.RTCTrackEvent = originalRTCTrackEvent;
+    spyFunctions.constructorSpy = null;
+    spyFunctions.closeSpy = null;
+    spyFunctions.setRemoteDescriptionSpy = null;
+    spyFunctions.setLocalDescriptionSpy = null;
+    spyFunctions.createAnswerSpy = null;
+    spyFunctions.addTransceiverSpy = null;
+    spyFunctions.addIceCandidateSpy = null;
+    spyFunctions.sendDataSpy = null;
+};
+exports.unmockRTCPeerConnection = unmockRTCPeerConnection;
+//# sourceMappingURL=mockRTCPeerConnection.js.map

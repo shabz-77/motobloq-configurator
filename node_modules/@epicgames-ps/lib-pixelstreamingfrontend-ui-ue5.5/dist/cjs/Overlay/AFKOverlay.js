@@ -1,0 +1,48 @@
+"use strict";
+// Copyright Epic Games, Inc. All Rights Reserved.
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.AFKOverlay = void 0;
+const ActionOverlay_1 = require("./ActionOverlay");
+/**
+ * Show an overlay for when the session is unattended, it begins a countdown timer, which when elapsed will disconnect the stream.
+ */
+class AFKOverlay extends ActionOverlay_1.ActionOverlay {
+    /**
+     * @returns The created root element of this overlay.
+     */
+    static createRootElement() {
+        const afkOverlayHtml = document.createElement('div');
+        afkOverlayHtml.id = 'afkOverlay';
+        afkOverlayHtml.className = 'clickableState';
+        return afkOverlayHtml;
+    }
+    /**
+     * @returns The created content element of this overlay, which contain some text for an afk count down.
+     */
+    static createContentElement() {
+        const afkOverlayHtmlInner = document.createElement('div');
+        afkOverlayHtmlInner.id = 'afkOverlayInner';
+        afkOverlayHtmlInner.innerHTML =
+            '<center>No activity detected<br>Disconnecting in <span id="afkCountDownNumber"></span> seconds<br>Click to continue<br></center>';
+        return afkOverlayHtmlInner;
+    }
+    /**
+     * Construct an Afk overlay
+     * @param parentElement - the element this overlay will be inserted into
+     */
+    constructor(rootDiv) {
+        super(rootDiv, AFKOverlay.createRootElement(), AFKOverlay.createContentElement());
+        this.rootElement.addEventListener('click', () => {
+            this.activate();
+        });
+    }
+    /**
+     * Update the count down spans number for the overlay
+     * @param countdown - the count down number to be inserted into the span for updating
+     */
+    updateCountdown(countdown) {
+        this.textElement.innerHTML = `<center>No activity detected<br>Disconnecting in <span id="afkCountDownNumber">${countdown}</span> seconds<br>Click to continue<br></center>`;
+    }
+}
+exports.AFKOverlay = AFKOverlay;
+//# sourceMappingURL=AFKOverlay.js.map
