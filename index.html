@@ -385,16 +385,23 @@
 
   // ✅ Share button logic
   window.shareBuild = () => {
-    const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(configState)) {
-      params.append(key, value);
-    }
-    const shareURL = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
-    navigator.clipboard.writeText(shareURL).then(() => {
-      showToast("✅ Link copied!");
-      console.log("🔗 Share URL:", shareURL);
-    });
-  };
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(configState)) {
+    params.append(key, value);
+  }
+  const shareURL = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+
+  navigator.clipboard.writeText(shareURL).then(() => {
+    showToast("✅ Link copied!");
+
+    // ✅ Delay email open slightly to avoid browser blocking
+    setTimeout(() => {
+      const subject = encodeURIComponent("New Configurator Submission");
+      const body = encodeURIComponent(`Here's my configuration: ${shareURL}`);
+      window.location.href = `mailto:renders@motobloq.com?subject=${subject}&body=${body}`;
+    }, 400);
+  });
+};
 
   // ✅ Load config from URL
   window.addEventListener("load", () => {
