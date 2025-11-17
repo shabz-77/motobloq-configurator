@@ -119,12 +119,6 @@
     localStorage.removeItem("userSpec");
   }
 
-  // HIDE LOADING WHEN READY
-  provider.onReady(() => {
-    const loader = document.getElementById("loading-screen");
-    if (loader) loader.style.display = "none";
-  });
-
   // UE → WEB (save VS_ values)
   provider.onResponse((data) => {
     try {
@@ -136,37 +130,42 @@
     } catch {}
   });
 
-  // LOAD CONFIG FROM URL (MATCH OLD BEHAVIOR)
-  window.addEventListener("load", () => {
-    const params = new URLSearchParams(window.location.search);
-    const loaded = {};
-    params.forEach((v, k) => (loaded[k] = v));
+  // ✅ PARSE URL CONFIG IMMEDIATELY (before stream is ready)
+  const params = new URLSearchParams(window.location.search);
+  const loadedConfig = {};
+  params.forEach((v, k) => (loadedConfig[k] = v));
 
-    if (Object.keys(loaded).length === 0) {
-      console.log("ℹ️ No config in URL");
-      return;
-    }
-
-    console.log("🔗 Found config in URL:", loaded);
-
-    configState = { ...loaded };
+  if (Object.keys(loadedConfig).length > 0) {
+    console.log("🔗 Found config in URL:", loadedConfig);
+    configState = { ...loadedConfig };
     localStorage.setItem("userSpec", JSON.stringify(configState));
+  }
 
-    // Attach to stream ready (which already includes 4s delay inside arcware.js)
-    provider.onReady(() => {
-      console.log("✅ Stream Ready — Applying URL config…");
+  // ✅ SINGLE onReady CALL - handles both loading screen AND config loading
+  provider.onReady(() => {
+    console.log("🟢 Stream Ready!");
+    
+    // 1. Hide loading screen
+    const loader = document.getElementById("loading-screen");
+    if (loader) loader.style.display = "none";
 
+    // 2. Apply URL config if present
+    if (Object.keys(loadedConfig).length > 0) {
+      console.log("✅ Applying URL config to UE...");
+      
       let delay = 0;
       const delayStep = 300;
 
-      Object.entries(loaded).forEach(([action, value]) => {
+      Object.entries(loadedConfig).forEach(([action, value]) => {
         setTimeout(() => {
           console.log(`📤 Sending from URL: ${action} = ${value}`);
           provider.send(action, value);
         }, delay);
         delay += delayStep;
       });
-    });
+    } else {
+      console.log("ℹ️ No URL config to apply");
+    }
   });
 
   // TOAST
