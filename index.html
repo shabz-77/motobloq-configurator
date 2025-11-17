@@ -99,97 +99,94 @@
 <!-- EMAILJS INIT -->
 <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
 <script>
-  emailjs.init("5peNVQjPPCax3FxNB");
+  emailjs.init("5peNVQjPPCax3FxNB");  /* Your public EmailJS key */
 </script>
 
-<!-- ARCWARE SDK -->
+<!-- MAIN JS MODULE -->
 <script type="module">
-  import * as ArcwareSDK from "https://unpkg.com/@arcware-cloud/pixelstreaming-websdk@latest/index.esm.js";
-  const { ArcwareInit } = ArcwareSDK;
+  import { StreamingProvider } from "./providers/streaming-provider.js";
 
+  /* ------------------------------------------------------------
+     INIT STREAM PROVIDER (Arcware default)
+     Switch later by:  "streampixel"
+  ------------------------------------------------------------ */
+  const provider = await StreamingProvider.init("arcware");
+
+  /* ------------------------------------------------------------
+     CONFIG STATE
+  ------------------------------------------------------------ */
   let configState = JSON.parse(localStorage.getItem("userSpec") || "{}");
 
-  if (window.location.search.length <= 1) {
+  const hasSpec = window.location.search.length > 1;
+  if (!hasSpec) {
     configState = {};
     localStorage.removeItem("userSpec");
   }
 
-  const { Application, PixelStreaming } = ArcwareInit(
-    { shareId: "share-789c771a-f254-4ef2-964f-471477e45529" },
-    {
-      initialSettings: {
-        AutoConnect: true,
-        AutoPlayVideo: true,
-        StartVideoMuted: true,
-        TouchInput: true,
-      },
-      settings: {
-        fullscreenButton: false,
-        settingsButton: false,
-        infoButton: false,
-        audioButton: false,
-        micButton: false,
-        connectionStrengthIcon: false,
-      },
-    }
-  );
+  /* ------------------------------------------------------------
+     UE READY
+  ------------------------------------------------------------ */
+  provider.onReady(() => {
+    document.getElementById("loading-screen").style.display = "none";
+  });
 
-  const container = document.getElementById("stream-container");
-  if (container && Application?.rootElement) {
-    container.appendChild(Application.rootElement);
-  }
-
-  const ALLOWED = /^VS_/;
-
-  Application.getApplicationResponse((response) => {
+  /* ------------------------------------------------------------
+     UE → WEB MESSAGES
+  ------------------------------------------------------------ */
+  provider.onResponse((response) => {
     try {
-      const d = JSON.parse(response);
-      if (d && ALLOWED.test(d.action) && d.value && d.value !== "None") {
-        configState[d.action] = d.value;
+      if (response.action?.startsWith("VS_") && response.value !== "None") {
+        configState[response.action] = response.value;
         localStorage.setItem("userSpec", JSON.stringify(configState));
       }
     } catch {}
   });
 
-  /* LOAD CONFIG FROM URL */
+  /* ------------------------------------------------------------
+     SEND CONFIG TO UE
+  ------------------------------------------------------------ */
+  function sendToUE(action, value) {
+    provider.send(action, value);
+  }
+
+  /* ------------------------------------------------------------
+     LOAD CONFIG FROM URL
+  ------------------------------------------------------------ */
   window.addEventListener("load", () => {
     const params = new URLSearchParams(window.location.search);
     const loaded = {};
-    params.forEach((v, k) => loaded[k] = v);
+    params.forEach((v, k) => (loaded[k] = v));
 
     if (Object.keys(loaded).length === 0) return;
 
     configState = { ...loaded };
     localStorage.setItem("userSpec", JSON.stringify(configState));
 
-    PixelStreaming.videoInitializedHandler.add(() => {
+    provider.onReady(() => {
       setTimeout(() => {
         let delay = 0;
-        const gap = 300;
+        const step = 300;
         Object.entries(loaded).forEach(([k, v]) => {
-          setTimeout(() => Application.emitUIInteraction({ action: k, value: v }), delay);
-          delay += gap;
+          setTimeout(() => sendToUE(k, v), delay);
+          delay += step;
         });
       }, 4000);
     });
   });
 
+  /* ------------------------------------------------------------
+     TOAST
+  ------------------------------------------------------------ */
   function showToast(msg) {
     const toast = document.getElementById("toast");
     toast.innerText = msg;
     toast.style.display = "block";
-    setTimeout(() => toast.style.display = "none", 2000);
+    setTimeout(() => (toast.style.display = "none"), 2000);
   }
 
-  PixelStreaming.videoInitializedHandler.add(() => {
-    document.getElementById("loading-screen").style.display = "none";
-  });
-
-  window.closeLoading = () => {
-    document.getElementById("loading-screen").style.display = "none";
-  };
-
-  /* SHARE MODAL LOGIC */
+  /* ------------------------------------------------------------
+     SHARE MODAL
+  ------------------------------------------------------------ */
   window.openShareModal = () => {
     document.getElementById("shareModal").style.display = "flex";
   };
@@ -223,12 +220,17 @@
         user_name: name,
         user_email: email,
         user_message: note,
-        config_url: url
+        config_url: url,
       }
     ).then(() => {
       showToast("Email sent!");
       closeShareModal();
     }).catch(() => alert("Error sending email."));
+  };
+
+  /* CLOSE LOADING SCREEN BUTTON */
+  window.closeLoading = () => {
+    document.getElementById("loading-screen").style.display = "none";
   };
 </script>
 
@@ -241,7 +243,16 @@
   gtag('config', 'G-HCP6E3LMJP');
 </script>
 
+<!-- VERCEL ANALYTICS -->
+<script>
+  window.va = window.va || function () {
+    (window.vaq = window.vaq || []).push(arguments);
+  };
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
+
 </head>
+
 <body>
 
 <!-- LOADING SCREEN -->
@@ -250,7 +261,7 @@
   <button onclick="closeLoading()" style="padding:10px 20px;">Enter Experience</button>
 </div>
 
-<!-- STREAM -->
+<!-- STREAM OUTPUT -->
 <div id="stream-container"></div>
 
 <!-- SHARE BUTTON -->
@@ -273,11 +284,17 @@
     <label>Message (optional)</label>
     <textarea id="share_message" rows="3" style="width:100%;margin-bottom:10px;padding:8px;"></textarea>
 
-    <button onclick="copyShareLink()" style="width:100%;padding:10px;background:#333;color:white;border:none;border-radius:6px;margin-bottom:10px;">Copy Link</button>
+    <button onclick="copyShareLink()" style="width:100%;padding:10px;background:#333;color:white;border:none;border-radius:6px;margin-bottom:10px;">
+      Copy Link
+    </button>
 
-    <button onclick="sendShareEmail()" style="width:100%;padding:10px;background:#007bff;color:white;border:none;border-radius:6px;margin-bottom:10px;">Send to Motobloq</button>
+    <button onclick="sendShareEmail()" style="width:100%;padding:10px;background:#007bff;color:white;border:none;border-radius:6px;margin-bottom:10px;">
+      Send to Motobloq
+    </button>
 
-    <button onclick="closeShareModal()" style="width:100%;padding:10px;background:#444;color:white;border:none;border-radius:6px;">Cancel</button>
+    <button onclick="closeShareModal()" style="width:100%;padding:10px;background:#444;color:white;border:none;border-radius:6px;">
+      Cancel
+    </button>
   </div>
 </div>
 
