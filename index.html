@@ -5,41 +5,35 @@
 <title>Bentley Configurator</title>
 <link rel="icon" type="image/png" href="favicon.png" />
 
-<!-- ✅ Viewport fix for mobile -->
+<!-- MOBILE VIEW FIX -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 
 <style>
-  /* ✅ Base Layout Fix */
   html, body {
     margin: 0;
     padding: 0;
     width: 100%;
     height: 100%;
-    min-height: -webkit-fill-available; /* iOS safe area height fix */
     background: black;
     overflow: hidden;
     font-family: sans-serif;
-    touch-action: none; /* disables pinch + double-tap zoom */
+    touch-action: none;
   }
 
-  * {
-    touch-action: manipulation; /* avoids accidental zooms on Android */
-  }
-
-  /* ✅ Stream Container (keeps aspect ratio) */
   #stream-container {
     width: 100vw;
     height: 100vh;
     position: relative;
     overflow: hidden;
   }
+
   #stream-container video, #player {
     width: 100%;
     height: 100%;
     object-fit: contain;
   }
 
-  /* ✅ Share Button */
+  /* SHARE BUTTON */
   #shareBtn {
     position: fixed;
     top: 12px;
@@ -56,7 +50,7 @@
   }
   #shareBtn:hover { background: rgba(255,255,255,0.25); }
 
-  /* ✅ Toast Notification */
+  /* TOAST */
   #toast {
     position: fixed;
     bottom: 20px;
@@ -70,55 +64,56 @@
     z-index: 99999;
   }
 
-  /* ✅ Loading Screen Overlay */
+  /* LOADING OVERLAY */
   #loading-screen {
     position: fixed;
     top: 0; left: 0;
     width: 100%;
     height: 100%;
     background: black;
-    color: white;
     display: flex;
     flex-direction: column;
-    align-items: center;
     justify-content: center;
+    align-items: center;
     z-index: 9999;
   }
   #loading-screen img {
     width: 70%;
     max-width: 900px;
-    height: auto;
     border-radius: 8px;
     margin-bottom: 20px;
   }
-  #close-loading {
-    background: rgba(255,255,255,0.15);
-    color: white;
-    border: 1px solid rgba(255,255,255,0.4);
-    border-radius: 6px;
-    padding: 8px 14px;
-    font-size: 14px;
-    cursor: pointer;
+
+  /* SHARE MODAL */
+  #shareModal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
   }
-  #close-loading:hover { background: rgba(255,255,255,0.3); }
 </style>
 
+<!-- EMAILJS INIT -->
+<script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+<script>
+  emailjs.init("5peNVQjPPCax3FxNB");
+</script>
+
+<!-- ARCWARE SDK -->
 <script type="module">
   import * as ArcwareSDK from "https://unpkg.com/@arcware-cloud/pixelstreaming-websdk@latest/index.esm.js";
   const { ArcwareInit } = ArcwareSDK;
 
-  /* --------------------------------------------------------------------------
-     ✅ INITIAL SETUP
-  -------------------------------------------------------------------------- */
   let configState = JSON.parse(localStorage.getItem("userSpec") || "{}");
 
-  const hasSpec = window.location.search.length > 1;
-  if (!hasSpec) {
+  if (window.location.search.length <= 1) {
     configState = {};
     localStorage.removeItem("userSpec");
   }
 
-  // ✅ Init Pixel Streaming
   const { Application, PixelStreaming } = ArcwareInit(
     { shareId: "share-789c771a-f254-4ef2-964f-471477e45529" },
     {
@@ -139,15 +134,11 @@
     }
   );
 
-  // ✅ Mount stream
   const container = document.getElementById("stream-container");
   if (container && Application?.rootElement) {
     container.appendChild(Application.rootElement);
   }
 
-  /* --------------------------------------------------------------------------
-     ✅ HANDLE UE → WEB CONFIG UPDATES
-  -------------------------------------------------------------------------- */
   const ALLOWED = /^VS_/;
 
   Application.getApplicationResponse((response) => {
@@ -156,101 +147,92 @@
       if (d && ALLOWED.test(d.action) && d.value && d.value !== "None") {
         configState[d.action] = d.value;
         localStorage.setItem("userSpec", JSON.stringify(configState));
-        console.log("✅ Saved:", d.action, "=", d.value);
-      } else {
-        console.log("⏭️ Ignored:", d);
       }
-    } catch {
-      console.warn("⚠️ Ignored non-JSON message:", response);
-    }
+    } catch {}
   });
 
-  /* --------------------------------------------------------------------------
-     ✅ SHARE + LOAD LOGIC
-  -------------------------------------------------------------------------- */
-  window.shareBuild = () => {
-    const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(configState)) {
-      params.append(key, value);
-    }
-    const shareURL = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
-
-    navigator.clipboard.writeText(shareURL).then(() => {
-      showToast("✅ Link copied!");
-
-      // ✅ Delay mail trigger to avoid browser blocking
-      setTimeout(() => {
-        const subject = encodeURIComponent("New Configurator Submission");
-        const body = encodeURIComponent(`Here's my configuration: ${shareURL}`);
-        window.location.href = `mailto:renders@motobloq.com?subject=${subject}&body=${body}`;
-      }, 400);
-    });
-  };
-
-  // ✅ Load config from URL
+  /* LOAD CONFIG FROM URL */
   window.addEventListener("load", () => {
     const params = new URLSearchParams(window.location.search);
-    const loadedConfig = {};
-    params.forEach((value, key) => (loadedConfig[key] = value));
+    const loaded = {};
+    params.forEach((v, k) => loaded[k] = v);
 
-    if (Object.keys(loadedConfig).length === 0) {
-      console.log("ℹ️ No config in URL");
-      return;
-    }
+    if (Object.keys(loaded).length === 0) return;
 
-    configState = { ...loadedConfig };
+    configState = { ...loaded };
     localStorage.setItem("userSpec", JSON.stringify(configState));
 
-    console.log("🔗 Found config in URL:", loadedConfig);
-
     PixelStreaming.videoInitializedHandler.add(() => {
-      console.log("📺 Stream video started...");
       setTimeout(() => {
-        console.log("✅ Stream Ready — Applying config...");
         let delay = 0;
-        const delayStep = 300;
-        Object.entries(loadedConfig).forEach(([action, value]) => {
-          setTimeout(() => {
-            console.log(`📤 Sending: ${action} = ${value}`);
-            Application.emitUIInteraction({ action, value });
-          }, delay);
-          delay += delayStep;
+        const gap = 300;
+        Object.entries(loaded).forEach(([k, v]) => {
+          setTimeout(() => Application.emitUIInteraction({ action: k, value: v }), delay);
+          delay += gap;
         });
       }, 4000);
     });
   });
 
-  // ✅ Toast notification
   function showToast(msg) {
     const toast = document.getElementById("toast");
     toast.innerText = msg;
     toast.style.display = "block";
-    setTimeout(() => (toast.style.display = "none"), 2000);
+    setTimeout(() => toast.style.display = "none", 2000);
   }
 
-  /* --------------------------------------------------------------------------
-     ✅ Hide Loading Screen when Stream is Ready
-  -------------------------------------------------------------------------- */
   PixelStreaming.videoInitializedHandler.add(() => {
-    const loader = document.getElementById("loading-screen");
-    if (loader) loader.style.display = "none";
+    document.getElementById("loading-screen").style.display = "none";
   });
 
   window.closeLoading = () => {
     document.getElementById("loading-screen").style.display = "none";
   };
-</script>
 
-<!-- ✅ Vercel Analytics -->
-<script>
-  window.va = window.va || function () {
-    (window.vaq = window.vaq || []).push(arguments);
+  /* SHARE MODAL LOGIC */
+  window.openShareModal = () => {
+    document.getElementById("shareModal").style.display = "flex";
+  };
+  window.closeShareModal = () => {
+    document.getElementById("shareModal").style.display = "none";
+  };
+
+  window.copyShareLink = () => {
+    const params = new URLSearchParams(configState);
+    const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+    navigator.clipboard.writeText(url).then(() => showToast("Link copied!"));
+  };
+
+  window.sendShareEmail = () => {
+    const name = document.getElementById("share_name").value.trim();
+    const email = document.getElementById("share_email").value.trim();
+    const note = document.getElementById("share_message").value.trim();
+
+    if (!name || !email) {
+      alert("Please enter your name and email.");
+      return;
+    }
+
+    const params = new URLSearchParams(configState);
+    const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+
+    emailjs.send(
+      "service_x60sll8",
+      "template_0gersxn",
+      {
+        user_name: name,
+        user_email: email,
+        user_message: note,
+        config_url: url
+      }
+    ).then(() => {
+      showToast("Email sent!");
+      closeShareModal();
+    }).catch(() => alert("Error sending email."));
   };
 </script>
-<script defer src="/_vercel/insights/script.js"></script>
 
-<!-- ✅ Google Analytics -->
-<!-- Google tag (gtag.js) -->
+<!-- GOOGLE ANALYTICS -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-HCP6E3LMJP"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
@@ -258,17 +240,48 @@
   gtag('js', new Date());
   gtag('config', 'G-HCP6E3LMJP');
 </script>
+
 </head>
-
 <body>
-  <!-- ✅ Loading Screen -->
-  <div id="loading-screen">
-    <img src="loading-screen.png" alt="Loading Configuration" />
-    <button id="close-loading" onclick="closeLoading()">Enter Experience</button>
-  </div>
 
-  <div id="stream-container"></div>
-  <button id="shareBtn" onclick="shareBuild()">Share Build</button>
-  <div id="toast"></div>
+<!-- LOADING SCREEN -->
+<div id="loading-screen">
+  <img src="loading-screen.png" alt="Loading" />
+  <button onclick="closeLoading()" style="padding:10px 20px;">Enter Experience</button>
+</div>
+
+<!-- STREAM -->
+<div id="stream-container"></div>
+
+<!-- SHARE BUTTON -->
+<button id="shareBtn" onclick="openShareModal()">Share</button>
+
+<!-- SHARE MODAL -->
+<div id="shareModal">
+  <div style="
+    background:#111; padding:22px; border-radius:10px; width:90%;
+    max-width:380px; color:white;
+  ">
+    <h3>Share Configuration</h3>
+
+    <label>Your Name</label>
+    <input id="share_name" style="width:100%;margin-bottom:10px;padding:8px;">
+
+    <label>Your Email</label>
+    <input id="share_email" type="email" style="width:100%;margin-bottom:10px;padding:8px;">
+
+    <label>Message (optional)</label>
+    <textarea id="share_message" rows="3" style="width:100%;margin-bottom:10px;padding:8px;"></textarea>
+
+    <button onclick="copyShareLink()" style="width:100%;padding:10px;background:#333;color:white;border:none;border-radius:6px;margin-bottom:10px;">Copy Link</button>
+
+    <button onclick="sendShareEmail()" style="width:100%;padding:10px;background:#007bff;color:white;border:none;border-radius:6px;margin-bottom:10px;">Send to Motobloq</button>
+
+    <button onclick="closeShareModal()" style="width:100%;padding:10px;background:#444;color:white;border:none;border-radius:6px;">Cancel</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
 </body>
 </html>
