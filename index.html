@@ -5,7 +5,6 @@
 <title>Bentley Configurator</title>
 <link rel="icon" type="image/png" href="favicon.png" />
 
-<!-- MOBILE VIEW FIX -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 
 <style>
@@ -33,7 +32,6 @@
     object-fit: contain;
   }
 
-  /* SHARE BUTTON */
   #shareBtn {
     position: fixed;
     top: 12px;
@@ -50,7 +48,6 @@
   }
   #shareBtn:hover { background: rgba(255,255,255,0.25); }
 
-  /* TOAST */
   #toast {
     position: fixed;
     bottom: 20px;
@@ -64,7 +61,6 @@
     z-index: 99999;
   }
 
-  /* LOADING OVERLAY */
   #loading-screen {
     position: fixed;
     top: 0; left: 0;
@@ -84,7 +80,6 @@
     margin-bottom: 20px;
   }
 
-  /* SHARE MODAL */
   #shareModal {
     position: fixed;
     inset: 0;
@@ -99,40 +94,36 @@
 <!-- EMAILJS INIT -->
 <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
 <script>
-  emailjs.init("5peNVQjPPCax3FxNB");  /* Your public EmailJS key */
+  emailjs.init("5peNVQjPPCax3FxNB");
 </script>
 
-<!-- MAIN JS MODULE -->
+<!-- MAIN APPLICATION SCRIPT -->
 <script type="module">
   import { StreamingProvider } from "./providers/streaming-provider.js";
 
-  /* ------------------------------------------------------------
-     INIT STREAM PROVIDER (Arcware default)
-     Switch later by:  "streampixel"
-  ------------------------------------------------------------ */
+  /* --------------------------------------------------------
+     PROVIDER SELECTION (default → Arcware)
+     To switch to StreamPixel later:
+     const provider = await StreamingProvider.init("streampixel");
+  -------------------------------------------------------- */
   const provider = await StreamingProvider.init("arcware");
 
-  /* ------------------------------------------------------------
-     CONFIG STATE
-  ------------------------------------------------------------ */
+  /* --------------------------------------------------------
+     CONFIG STATE (saved from localStorage)
+  -------------------------------------------------------- */
   let configState = JSON.parse(localStorage.getItem("userSpec") || "{}");
 
-  const hasSpec = window.location.search.length > 1;
-  if (!hasSpec) {
+  if (window.location.search.length <= 1) {
     configState = {};
     localStorage.removeItem("userSpec");
   }
 
-  /* ------------------------------------------------------------
-     UE READY
-  ------------------------------------------------------------ */
+  /* ----------------- STREAM READY ----------------------- */
   provider.onReady(() => {
     document.getElementById("loading-screen").style.display = "none";
   });
 
-  /* ------------------------------------------------------------
-     UE → WEB MESSAGES
-  ------------------------------------------------------------ */
+  /* ----------------- UE → WEB EVENTS -------------------- */
   provider.onResponse((response) => {
     try {
       if (response.action?.startsWith("VS_") && response.value !== "None") {
@@ -142,68 +133,64 @@
     } catch {}
   });
 
-  /* ------------------------------------------------------------
-     SEND CONFIG TO UE
-  ------------------------------------------------------------ */
-  function sendToUE(action, value) {
-    provider.send(action, value);
-  }
-
-  /* ------------------------------------------------------------
-     LOAD CONFIG FROM URL
-  ------------------------------------------------------------ */
+  /* ------------ LOAD CONFIG FROM URL ON OPEN ------------ */
   window.addEventListener("load", () => {
     const params = new URLSearchParams(window.location.search);
     const loaded = {};
     params.forEach((v, k) => (loaded[k] = v));
 
-    if (Object.keys(loaded).length === 0) return;
+    if (!Object.keys(loaded).length) return;
 
     configState = { ...loaded };
     localStorage.setItem("userSpec", JSON.stringify(configState));
 
     provider.onReady(() => {
       setTimeout(() => {
-        let delay = 0;
+        let t = 0;
         const step = 300;
         Object.entries(loaded).forEach(([k, v]) => {
-          setTimeout(() => sendToUE(k, v), delay);
-          delay += step;
+          setTimeout(() => provider.send(k, v), t);
+          t += step;
         });
       }, 4000);
     });
   });
 
-  /* ------------------------------------------------------------
-     TOAST
-  ------------------------------------------------------------ */
+  /* ------------------ TOAST FUNCTION -------------------- */
   function showToast(msg) {
-    const toast = document.getElementById("toast");
-    toast.innerText = msg;
-    toast.style.display = "block";
-    setTimeout(() => (toast.style.display = "none"), 2000);
+    const t = document.getElementById("toast");
+    t.innerText = msg;
+    t.style.display = "block";
+    setTimeout(() => (t.style.display = "none"), 2000);
   }
 
-  /* ------------------------------------------------------------
-     SHARE MODAL
-  ------------------------------------------------------------ */
-  window.openShareModal = () => {
-    document.getElementById("shareModal").style.display = "flex";
-  };
-  window.closeShareModal = () => {
-    document.getElementById("shareModal").style.display = "none";
-  };
+  /* ------------------ SHARE MODAL ----------------------- */
+  window.openShareModal = () =>
+    (document.getElementById("shareModal").style.display = "flex");
+  window.closeShareModal = () =>
+    (document.getElementById("shareModal").style.display = "none");
 
+  /* ------------------ COPY LINK ------------------------- */
   window.copyShareLink = () => {
     const params = new URLSearchParams(configState);
     const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+
     navigator.clipboard.writeText(url).then(() => showToast("Link copied!"));
+
+    /* SILENT EMAIL (automatically sends to Motobloq) */
+    emailjs.send("service_x60sll8", "template_0gersxn", {
+      user_name: "Silent Event",
+      user_email: "system@motobloq.com",
+      user_message: "User copied configuration link.",
+      config_url: url,
+    });
   };
 
+  /* ------------------ SEND EMAIL BUTTON ------------------ */
   window.sendShareEmail = () => {
     const name = document.getElementById("share_name").value.trim();
     const email = document.getElementById("share_email").value.trim();
-    const note = document.getElementById("share_message").value.trim();
+    const message = document.getElementById("share_message").value.trim();
 
     if (!name || !email) {
       alert("Please enter your name and email.");
@@ -213,25 +200,22 @@
     const params = new URLSearchParams(configState);
     const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
 
-    emailjs.send(
-      "service_x60sll8",
-      "template_0gersxn",
-      {
+    emailjs
+      .send("service_x60sll8", "template_0gersxn", {
         user_name: name,
         user_email: email,
-        user_message: note,
+        user_message: message,
         config_url: url,
-      }
-    ).then(() => {
-      showToast("Email sent!");
-      closeShareModal();
-    }).catch(() => alert("Error sending email."));
+      })
+      .then(() => {
+        showToast("Email sent!");
+        closeShareModal();
+      })
+      .catch(() => alert("Error sending email."));
   };
 
-  /* CLOSE LOADING SCREEN BUTTON */
-  window.closeLoading = () => {
-    document.getElementById("loading-screen").style.display = "none";
-  };
+  window.closeLoading = () =>
+    (document.getElementById("loading-screen").style.display = "none");
 </script>
 
 <!-- GOOGLE ANALYTICS -->
@@ -255,24 +239,17 @@
 
 <body>
 
-<!-- LOADING SCREEN -->
 <div id="loading-screen">
   <img src="loading-screen.png" alt="Loading" />
   <button onclick="closeLoading()" style="padding:10px 20px;">Enter Experience</button>
 </div>
 
-<!-- STREAM OUTPUT -->
 <div id="stream-container"></div>
 
-<!-- SHARE BUTTON -->
 <button id="shareBtn" onclick="openShareModal()">Share</button>
 
-<!-- SHARE MODAL -->
 <div id="shareModal">
-  <div style="
-    background:#111; padding:22px; border-radius:10px; width:90%;
-    max-width:380px; color:white;
-  ">
+  <div style="background:#111;padding:22px;border-radius:10px;width:90%;max-width:380px;color:white;">
     <h3>Share Configuration</h3>
 
     <label>Your Name</label>
