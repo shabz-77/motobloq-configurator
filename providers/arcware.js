@@ -34,10 +34,15 @@ export async function initArcware(context) {
     context.container.appendChild(Application.rootElement);
   }
 
-  function send(action, value) {
-    console.log("📤 Sending to UE:", action, value);
-    Application.emitUIInteraction({ action, value });
-  }
+function send(action, value) {
+  console.log("📤 Sending to UE:", action, value);
+
+  // 1) old working format (string)
+  Application.emitUIInteraction(JSON.stringify({ action, value }));
+
+  // 2) fallback format (object)
+  Application.emitUIInteraction({ action, value });
+}
 
   function onResponse(callback) {
     Application.getApplicationResponse((msg) => {
@@ -70,4 +75,3 @@ export async function initArcware(context) {
     onReady,
   };
 }
-    
