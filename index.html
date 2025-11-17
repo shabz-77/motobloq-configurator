@@ -134,27 +134,34 @@
   });
 
   /* ------------ LOAD CONFIG FROM URL ON OPEN ------------ */
-  window.addEventListener("load", () => {
-    const params = new URLSearchParams(window.location.search);
-    const loaded = {};
-    params.forEach((v, k) => (loaded[k] = v));
+  window.addEventListener("DOMContentLoaded", () => {
+  const params = new URLSearchParams(window.location.search);
+  const loaded = {};
+  params.forEach((v, k) => (loaded[k] = v));
 
-    if (!Object.keys(loaded).length) return;
+  if (Object.keys(loaded).length === 0) return;
 
-    configState = { ...loaded };
-    localStorage.setItem("userSpec", JSON.stringify(configState));
+  // Save current config
+  configState = { ...loaded };
+  localStorage.setItem("userSpec", JSON.stringify(configState));
 
-    provider.onReady(() => {
+  // Wait for the stream to actually start
+  provider.onReady(() => {
+    console.log("UE Stream Ready — applying URL config");
+
+    let delay = 0;
+    const step = 300;
+
+    Object.entries(loaded).forEach(([action, value]) => {
       setTimeout(() => {
-        let t = 0;
-        const step = 300;
-        Object.entries(loaded).forEach(([k, v]) => {
-          setTimeout(() => provider.send(k, v), t);
-          t += step;
-        });
-      }, 4000);
+        console.log("Sending", action, value);
+        provider.send(action, value);
+      }, delay);
+
+      delay += step;
     });
   });
+});
 
   /* ------------------ TOAST FUNCTION -------------------- */
   function showToast(msg) {
