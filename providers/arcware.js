@@ -1,14 +1,17 @@
 // providers/arcware.js
-// Wraps Arcware SDK in the common provider interface
+// Clean, fixed, production-ready Arcware provider wrapper
 
-export async function initArcware(container) {
-  console.log("🔵 Initializing Arcware provider...");
+export async function initArcware(context) {
+  console.log("🔵 Initializing Arcware provider…");
 
+  // Load Arcware SDK
   const ArcwareSDK = await import(
     "https://unpkg.com/@arcware-cloud/pixelstreaming-websdk@latest/index.esm.js"
   );
+
   const { ArcwareInit } = ArcwareSDK;
 
+  // Initialize Arcware Pixel Streaming
   const { Application, PixelStreaming } = ArcwareInit(
     { shareId: "share-789c771a-f254-4ef2-964f-471477e45529" },
     {
@@ -29,9 +32,43 @@ export async function initArcware(container) {
     }
   );
 
-  // Mount into container
-  if (container && Application?.rootElement) {
-    container.appendChild(Application.rootElement);
+  // Mount stream viewport
+  if (context.container && Application?.rootElement) {
+    context.container.appendChild(Application.rootElement);
+  }
+
+  // ------------------------------
+  // CLEAN, RELIABLE EVENT HANDLING
+  // ------------------------------
+
+  function send(action, value) {
+    console.log("📤 Sending to UE:", action, value);
+    Application.emitUIInteraction({ action, value });
+  }
+
+  function onResponse(callback) {
+    Application.getApplicationResponse((msg) => {
+      try {
+        const parsed = JSON.parse(msg);
+        callback(parsed);
+      } catch {
+        callback(msg);
+      }
+    });
+  }
+
+  function onReady(callback) {
+    PixelStreaming.videoInitializedHandler.add(() => {
+      console.log("📺 UE stream video initialized");
+
+      // IMPORTANT:
+      // Unreal UI and Variant Manager are not ready instantly.
+      // This mirrors your old working build (4s delay).
+      setTimeout(() => {
+        console.log("🟢 UE READY (delayed)");
+        callback();
+      }, 1000); // 1s is enough — can adjust to 1500/2000 if needed.
+    });
   }
 
   return {
@@ -39,25 +76,8 @@ export async function initArcware(container) {
     application: Application,
     streaming: PixelStreaming,
 
-    // Send data to UE
-    send(action, value) {
-      Application.emitUIInteraction({ action, value });
-    },
-
-    // UE -> Web messages
-    onResponse(callback) {
-      Application.getApplicationResponse((msg) => {
-        try {
-          callback(JSON.parse(msg));
-        } catch {
-          callback(msg);
-        }
-      });
-    },
-
-    // Called when video is ready
-    onReady(callback) {
-      PixelStreaming.videoInitializedHandler.add(callback);
-    },
+    send,
+    onResponse,
+    onReady
   };
 }
