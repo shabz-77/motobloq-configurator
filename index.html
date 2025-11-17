@@ -133,33 +133,48 @@
     } catch {}
   });
 
+  /* ----------------- STREAM STATUS ---------------------- */
+  let streamIsReady = false;
+
+provider.onReady(() => {
+  streamIsReady = true;
+});
+
   /* ------------ LOAD CONFIG FROM URL ON OPEN ------------ */
-  window.addEventListener("DOMContentLoaded", () => {
+ window.addEventListener("DOMContentLoaded", () => {
   const params = new URLSearchParams(window.location.search);
   const loaded = {};
   params.forEach((v, k) => (loaded[k] = v));
 
   if (Object.keys(loaded).length === 0) return;
 
-  // Save current config
+  // Save config
   configState = { ...loaded };
   localStorage.setItem("userSpec", JSON.stringify(configState));
 
-  // Wait for the stream to actually start
-  provider.onReady(() => {
-    console.log("UE Stream Ready — applying URL config");
+  function applyConfigToUE() {
+    console.log("Applying URL config to UE…");
 
     let delay = 0;
     const step = 300;
 
     Object.entries(loaded).forEach(([action, value]) => {
-      setTimeout(() => {
-        console.log("Sending", action, value);
-        provider.send(action, value);
-      }, delay);
-
+      setTimeout(() => provider.send(action, value), delay);
       delay += step;
     });
+  }
+
+  // Case 1: stream ready BEFORE this executed
+  if (streamIsReady) {
+    console.log("Stream was already ready — applying config immediately");
+    applyConfigToUE();
+    return;
+  }
+
+  // Case 2: stream is NOT ready yet → wait
+  provider.onReady(() => {
+    console.log("Stream became ready — applying config");
+    applyConfigToUE();
   });
 });
 
