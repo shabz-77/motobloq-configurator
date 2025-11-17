@@ -5,7 +5,6 @@
 <title>Bentley Configurator</title>
 <link rel="icon" type="image/png" href="favicon.png" />
 
-<!-- MOBILE VIEW FIX -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 
 <style>
@@ -20,7 +19,6 @@
     touch-action: none;
   }
 
-  /* CONTAINER MUST ALWAYS FILL SCREEN */
   #stream-container {
     width: 100vw;
     height: 100vh;
@@ -28,14 +26,12 @@
     overflow: hidden;
   }
 
-  /* Arcware/StreamPixel root wrapper */
   #stream-container > * {
     width: 100% !important;
     height: 100% !important;
     display: block !important;
   }
 
-  /* Video styling */
   #stream-container video {
     width: 100%;
     height: 100%;
@@ -43,7 +39,6 @@
     display: block;
   }
 
-  /* SHARE BUTTON */
   #shareBtn {
     position: fixed;
     top: 12px;
@@ -58,12 +53,8 @@
     cursor: pointer;
     backdrop-filter: blur(8px);
   }
+  #shareBtn:hover { background: rgba(255,255,255,0.25); }
 
-  #shareBtn:hover {
-    background: rgba(255,255,255,0.25);
-  }
-
-  /* TOAST */
   #toast {
     position: fixed;
     bottom: 20px;
@@ -77,7 +68,6 @@
     z-index: 99999;
   }
 
-  /* LOADING SCREEN */
   #loading-screen {
     position: fixed;
     top: 0; left: 0;
@@ -90,7 +80,6 @@
     align-items: center;
     z-index: 9999;
   }
-
   #loading-screen img {
     width: 70%;
     max-width: 900px;
@@ -98,7 +87,6 @@
     margin-bottom: 20px;
   }
 
-  /* SHARE MODAL */
   #shareModal {
     position: fixed;
     inset: 0;
@@ -120,16 +108,10 @@
 <script type="module">
   import { StreamingProvider } from "./providers/streaming-provider.js";
 
-  /* ---------------------------------------------
-     STREAM PROVIDER
-     Arcware default — switch to StreamPixel later:
-     const provider = await StreamingProvider.init("streampixel");
-  --------------------------------------------- */
+  // Provider (Arcware by default)
   const provider = await StreamingProvider.init("arcware");
 
-  /* ---------------------------------------------
-     CONFIG STATE
-  --------------------------------------------- */
+  // CONFIG STATE
   let configState = JSON.parse(localStorage.getItem("userSpec") || "{}");
 
   if (window.location.search.length <= 1) {
@@ -137,56 +119,57 @@
     localStorage.removeItem("userSpec");
   }
 
-  let streamReady = false;
-
+  // HIDE LOADING WHEN READY
   provider.onReady(() => {
-    streamReady = true;
-    document.getElementById("loading-screen").style.display = "none";
+    const loader = document.getElementById("loading-screen");
+    if (loader) loader.style.display = "none";
   });
 
-  /* ---------------------------------------------
-     UE → WEB (variant changes)
-  --------------------------------------------- */
+  // UE → WEB (save VS_ values)
   provider.onResponse((data) => {
     try {
       if (data.action?.startsWith("VS_") && data.value !== "None") {
         configState[data.action] = data.value;
         localStorage.setItem("userSpec", JSON.stringify(configState));
+        console.log("✅ Saved from UE:", data.action, "=", data.value);
       }
     } catch {}
   });
 
-  /* ---------------------------------------------
-     LOAD URL PARAMETERS
-  --------------------------------------------- */
-  window.addEventListener("DOMContentLoaded", () => {
+  // LOAD CONFIG FROM URL (MATCH OLD BEHAVIOR)
+  window.addEventListener("load", () => {
     const params = new URLSearchParams(window.location.search);
     const loaded = {};
     params.forEach((v, k) => (loaded[k] = v));
 
-    if (Object.keys(loaded).length === 0) return;
+    if (Object.keys(loaded).length === 0) {
+      console.log("ℹ️ No config in URL");
+      return;
+    }
+
+    console.log("🔗 Found config in URL:", loaded);
 
     configState = { ...loaded };
     localStorage.setItem("userSpec", JSON.stringify(configState));
 
-    function applyConfig() {
-      console.log("Applying URL config…");
+    // Attach to stream ready (which already includes 4s delay inside arcware.js)
+    provider.onReady(() => {
+      console.log("✅ Stream Ready — Applying URL config…");
 
       let delay = 0;
-      const step = 300;
-      Object.entries(loaded).forEach(([action, value]) => {
-        setTimeout(() => provider.send(action, value), delay);
-        delay += step;
-      });
-    }
+      const delayStep = 300;
 
-    if (streamReady) applyConfig();
-    else provider.onReady(applyConfig);
+      Object.entries(loaded).forEach(([action, value]) => {
+        setTimeout(() => {
+          console.log(`📤 Sending from URL: ${action} = ${value}`);
+          provider.send(action, value);
+        }, delay);
+        delay += delayStep;
+      });
+    });
   });
 
-  /* ---------------------------------------------
-     TOAST
-  --------------------------------------------- */
+  // TOAST
   function showToast(msg) {
     const t = document.getElementById("toast");
     t.innerText = msg;
@@ -194,23 +177,19 @@
     setTimeout(() => (t.style.display = "none"), 2000);
   }
 
-  /* ---------------------------------------------
-     SHARE MODAL CONTROLS
-  --------------------------------------------- */
+  // SHARE MODAL
   window.openShareModal = () =>
     (document.getElementById("shareModal").style.display = "flex");
-
   window.closeShareModal = () =>
     (document.getElementById("shareModal").style.display = "none");
 
-  /* Copy URL + Silent Email Event */
+  // COPY LINK + SILENT EMAIL
   window.copyShareLink = () => {
     const params = new URLSearchParams(configState);
     const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
 
     navigator.clipboard.writeText(url).then(() => showToast("Link copied!"));
 
-    // Silent analytics email
     emailjs.send("service_x60sll8", "template_0gersxn", {
       user_name: "Silent Event",
       user_email: "system@motobloq.com",
@@ -219,7 +198,7 @@
     });
   };
 
-  /* Email submission to Motobloq */
+  // SEND EMAIL TO MOTOBLOQ
   window.sendShareEmail = () => {
     const name = document.getElementById("share_name").value.trim();
     const email = document.getElementById("share_email").value.trim();
@@ -249,7 +228,6 @@
 
   window.closeLoading = () =>
     (document.getElementById("loading-screen").style.display = "none");
-
 </script>
 
 <!-- GOOGLE ANALYTICS -->
@@ -273,19 +251,15 @@
 
 <body>
 
-<!-- LOADING SCREEN -->
 <div id="loading-screen">
   <img src="loading-screen.png" alt="Loading" />
   <button onclick="closeLoading()" style="padding:10px 20px;">Enter Experience</button>
 </div>
 
-<!-- STREAM OUTPUT -->
 <div id="stream-container"></div>
 
-<!-- SHARE BUTTON -->
 <button id="shareBtn" onclick="openShareModal()">Share</button>
 
-<!-- SHARE MODAL -->
 <div id="shareModal">
   <div style="background:#111;padding:22px;border-radius:10px;width:90%;max-width:380px;color:white;">
     <h3>Share Configuration</h3>
