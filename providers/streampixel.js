@@ -26,7 +26,7 @@ export async function initStreamPixel(container) {
   const { appStream, pixelStreaming, UIControl } =
     await StreamPixelApplication({
       AutoConnect: true,
-      appId: "YOUR_STREAMPIXEL_APPID_HERE", // replace when you get it
+      appId: "https://share.streampixel.io/692db8484a9ae9b379c6ab79", // updated streampixel id
     });
 
   if (container && appStream?.rootElement) {

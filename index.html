@@ -108,8 +108,8 @@
 <script type="module">
   import { StreamingProvider } from "./providers/streaming-provider.js";
 
-  // Provider (Arcware by default)
-  const provider = await StreamingProvider.init("arcware");
+  // Provider (Streampixel by default)
+  const provider = await StreamingProvider.init("streampixel");
 
   // CONFIG STATE
   let configState = JSON.parse(localStorage.getItem("userSpec") || "{}");
