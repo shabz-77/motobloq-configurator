@@ -1,34 +1,19 @@
 // providers/streampixel.js
-// Placeholder implementation for future StreamPixel integration
+// StreamPixel provider using the installed NPM SDK
+
+import { StreamPixelApplication } from "streampixel-web-sdk";
 
 export async function initStreamPixel(container) {
   console.log("🟣 Initializing StreamPixel provider...");
 
-  let StreamPixelModule;
-  try {
-    StreamPixelModule = await import("https://unpkg.com/streampixelsdk@latest");
-  } catch (err) {
-    console.warn("⚠️ StreamPixel SDK not available. Using no-op provider.");
-    return {
-      type: "streampixel",
-      send() {
-        console.warn("StreamPixel not initialized yet.");
-      },
-      onResponse() {},
-      onReady(cb) {
-        if (cb) cb();
-      },
-    };
-  }
-
-  const { StreamPixelApplication } = StreamPixelModule;
-
+  // ✅ Use your Project ID, NOT the share URL
   const { appStream, pixelStreaming, UIControl } =
     await StreamPixelApplication({
+      appId: "692db8484a9ae9b379c6ab79",  // your project ID
       AutoConnect: true,
-      appId: "https://share.streampixel.io/692db8484a9ae9b379c6ab79", // updated streampixel id
     });
 
+  // Mount video element
   if (container && appStream?.rootElement) {
     container.appendChild(appStream.rootElement);
   }
