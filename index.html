@@ -5,7 +5,8 @@
 <title>Bentley Configurator</title>
 <link rel="icon" type="image/png" href="favicon.png" />
 
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="viewport"
+  content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 
 <style>
   html, body {
@@ -53,7 +54,10 @@
     cursor: pointer;
     backdrop-filter: blur(8px);
   }
-  #shareBtn:hover { background: rgba(255,255,255,0.25); }
+
+  #shareBtn:hover {
+    background: rgba(255,255,255,0.25);
+  }
 
   #toast {
     position: fixed;
@@ -68,6 +72,9 @@
     z-index: 99999;
   }
 
+  /* --------------------------- */
+  /* LOADING SCREEN (FIXED)      */
+  /* --------------------------- */
   #loading-screen {
     position: fixed;
     top: 0; left: 0;
@@ -80,13 +87,31 @@
     align-items: center;
     z-index: 9999;
   }
+
   #loading-screen img {
     width: 70%;
     max-width: 900px;
-    border-radius: 8px;
+    height: auto;
+    display: block;
     margin-bottom: 20px;
+    object-fit: contain;
   }
 
+  #loading-screen button {
+    padding: 10px 20px;
+    font-size: 14px;
+    border-radius: 6px;
+    border: 1px solid #fff;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+  }
+
+  #loading-screen button:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  /* SHARE MODAL */
   #shareModal {
     position: fixed;
     inset: 0;
@@ -104,130 +129,8 @@
   emailjs.init("5peNVQjPPCax3FxNB");
 </script>
 
-<!-- MAIN APP SCRIPT -->
-<script type="module">
-  import { StreamingProvider } from "./providers/streaming-provider.js";
-
-  // Provider (Streampixel by default)
-  const provider = await StreamingProvider.init("streampixel");
-
-  // CONFIG STATE
-  let configState = JSON.parse(localStorage.getItem("userSpec") || "{}");
-
-  if (window.location.search.length <= 1) {
-    configState = {};
-    localStorage.removeItem("userSpec");
-  }
-
-  // UE → WEB (save VS_ values)
-  provider.onResponse((data) => {
-    try {
-      if (data.action?.startsWith("VS_") && data.value !== "None") {
-        configState[data.action] = data.value;
-        localStorage.setItem("userSpec", JSON.stringify(configState));
-        console.log("✅ Saved from UE:", data.action, "=", data.value);
-      }
-    } catch {}
-  });
-
-  // ✅ PARSE URL CONFIG IMMEDIATELY (before stream is ready)
-  const params = new URLSearchParams(window.location.search);
-  const loadedConfig = {};
-  params.forEach((v, k) => (loadedConfig[k] = v));
-
-  if (Object.keys(loadedConfig).length > 0) {
-    console.log("🔗 Found config in URL:", loadedConfig);
-    configState = { ...loadedConfig };
-    localStorage.setItem("userSpec", JSON.stringify(configState));
-  }
-
-  // ✅ SINGLE onReady CALL - handles both loading screen AND config loading
-  provider.onReady(() => {
-    console.log("🟢 Stream Ready!");
-    
-    // 1. Hide loading screen
-    const loader = document.getElementById("loading-screen");
-    if (loader) loader.style.display = "none";
-
-    // 2. Apply URL config if present
-    if (Object.keys(loadedConfig).length > 0) {
-      console.log("✅ Applying URL config to UE...");
-      
-      let delay = 0;
-      const delayStep = 300;
-
-      Object.entries(loadedConfig).forEach(([action, value]) => {
-        setTimeout(() => {
-          console.log(`📤 Sending from URL: ${action} = ${value}`);
-          provider.send(action, value);
-        }, delay);
-        delay += delayStep;
-      });
-    } else {
-      console.log("ℹ️ No URL config to apply");
-    }
-  });
-
-  // TOAST
-  function showToast(msg) {
-    const t = document.getElementById("toast");
-    t.innerText = msg;
-    t.style.display = "block";
-    setTimeout(() => (t.style.display = "none"), 2000);
-  }
-
-  // SHARE MODAL
-  window.openShareModal = () =>
-    (document.getElementById("shareModal").style.display = "flex");
-  window.closeShareModal = () =>
-    (document.getElementById("shareModal").style.display = "none");
-
-  // COPY LINK + SILENT EMAIL
-  window.copyShareLink = () => {
-    const params = new URLSearchParams(configState);
-    const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
-
-    navigator.clipboard.writeText(url).then(() => showToast("Link copied!"));
-
-    emailjs.send("service_x60sll8", "template_0gersxn", {
-      user_name: "Silent Event",
-      user_email: "system@motobloq.com",
-      user_message: "User copied share link",
-      config_url: url,
-    });
-  };
-
-  // SEND EMAIL TO MOTOBLOQ
-  window.sendShareEmail = () => {
-    const name = document.getElementById("share_name").value.trim();
-    const email = document.getElementById("share_email").value.trim();
-    const message = document.getElementById("share_message").value.trim();
-
-    if (!name || !email) {
-      alert("Please enter your name and email.");
-      return;
-    }
-
-    const params = new URLSearchParams(configState);
-    const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
-
-    emailjs
-      .send("service_x60sll8", "template_0gersxn", {
-        user_name: name,
-        user_email: email,
-        user_message: message,
-        config_url: url,
-      })
-      .then(() => {
-        showToast("Email sent!");
-        closeShareModal();
-      })
-      .catch(() => alert("Error sending email."));
-  };
-
-  window.closeLoading = () =>
-    (document.getElementById("loading-screen").style.display = "none");
-</script>
+<!-- MAIN JS (VITE BUNDLED) -->
+<script type="module" src="/main.js"></script>
 
 <!-- GOOGLE ANALYTICS -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-HCP6E3LMJP"></script>
@@ -250,15 +153,21 @@
 
 <body>
 
+<!-- ------------------------- -->
+<!-- FIXED LOADING SCREEN      -->
+<!-- ------------------------- -->
 <div id="loading-screen">
   <img src="loading-screen.png" alt="Loading" />
-  <button onclick="closeLoading()" style="padding:10px 20px;">Enter Experience</button>
+  <button onclick="closeLoading()">Enter Experience</button>
 </div>
 
+<!-- VIDEO STREAM CONTAINER -->
 <div id="stream-container"></div>
 
+<!-- SHARE BUTTON -->
 <button id="shareBtn" onclick="openShareModal()">Share</button>
 
+<!-- SHARE MODAL -->
 <div id="shareModal">
   <div style="background:#111;padding:22px;border-radius:10px;width:90%;max-width:380px;color:white;">
     <h3>Share Configuration</h3>
@@ -286,6 +195,7 @@
   </div>
 </div>
 
+<!-- TOAST -->
 <div id="toast"></div>
 
 </body>
