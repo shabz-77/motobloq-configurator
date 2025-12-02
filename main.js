@@ -39,9 +39,14 @@ window.addEventListener("message", (event) => {
 function send(action, value) {
   console.log("📤 Sending to UE:", action, value);
 
+  if (!iframe || !iframe.contentWindow) {
+    console.warn("⚠️ iframe not ready yet, cannot send message");
+    return;
+  }
+
   iframe.contentWindow.postMessage(
     {
-      type: "sp-send",      // REQUIRED
+      type: "sp-send", // REQUIRED by Streampixel iframe bridge
       action,
       value,
     },
@@ -71,7 +76,7 @@ window.addEventListener("message", (event) => {
     console.log("🟢 Streampixel Player Ready");
 
     let delay = 0;
-    const delayStep = 300;
+    const delayStep = 300; // ms between variant messages
 
     Object.entries(configState).forEach(([action, value]) => {
       setTimeout(() => send(action, value), delay);
@@ -81,16 +86,20 @@ window.addEventListener("message", (event) => {
 });
 
 // ------------------------------------------------------
-// SHARE LINK HANDLING
+// TOAST
 // ------------------------------------------------------
 function toast(msg) {
   const t = document.getElementById("toast");
+  if (!t) return;
   t.innerText = msg;
   t.style.display = "block";
   setTimeout(() => (t.style.display = "none"), 2500);
 }
 
-window.copyShareLink = () => {
+// ------------------------------------------------------
+// SHARE LINK HANDLING
+// ------------------------------------------------------
+function copyShareLink() {
   const params = new URLSearchParams(configState);
   const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
 
@@ -98,19 +107,20 @@ window.copyShareLink = () => {
   toast("Copied link!");
 
   // Silent email tracking
-  emailjs.send("service_x60sll8", "template_0gersxn", {
-    user_name: "Silent Event",
-    user_email: "system@motobloq.com",
-    user_message: "User copied share link",
-    config_url: url,
-  });
-};
+  if (window.emailjs) {
+    window.emailjs.send("service_x60sll8", "template_0gersxn", {
+      user_name: "Silent Event",
+      user_email: "system@motobloq.com",
+      user_message: "User copied share link",
+      config_url: url,
+    });
+  }
+}
 
-// If you have a share modal and form:
-window.sendShareEmail = () => {
-  const name = document.getElementById("share_name").value.trim();
-  const email = document.getElementById("share_email").value.trim();
-  const msg = document.getElementById("share_message").value.trim();
+function sendShareEmail() {
+  const name = document.getElementById("share_name")?.value.trim();
+  const email = document.getElementById("share_email")?.value.trim();
+  const msg = document.getElementById("share_message")?.value.trim();
 
   if (!name || !email) {
     alert("Please enter name + email.");
@@ -120,7 +130,12 @@ window.sendShareEmail = () => {
   const params = new URLSearchParams(configState);
   const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
 
-  emailjs
+  if (!window.emailjs) {
+    alert("Email service not loaded.");
+    return;
+  }
+
+  window.emailjs
     .send("service_x60sll8", "template_0gersxn", {
       user_name: name,
       user_email: email,
@@ -129,4 +144,43 @@ window.sendShareEmail = () => {
     })
     .then(() => toast("Email sent!"))
     .catch(() => alert("Email failed."));
-};
+}
+
+// ------------------------------------------------------
+// UI CONTROLS: START EXPERIENCE + SHARE MODAL
+// ------------------------------------------------------
+function startExperience() {
+  const loading = document.getElementById("loading-screen");
+  const iframeEl = document.getElementById("sp-frame");
+  const shareBtn = document.getElementById("shareBtn");
+
+  if (loading) loading.style.display = "none";
+  if (iframeEl) iframeEl.style.display = "block";
+  if (shareBtn) shareBtn.style.display = "inline-block";
+
+  // Optional: Google Analytics event
+  if (window.gtag) {
+    window.gtag("event", "start_experience", {
+      event_category: "engagement",
+    });
+  }
+}
+
+function openShareModal() {
+  const modal = document.getElementById("shareModal");
+  if (modal) modal.style.display = "flex";
+}
+
+function closeShareModal() {
+  const modal = document.getElementById("shareModal");
+  if (modal) modal.style.display = "none";
+}
+
+// ------------------------------------------------------
+// EXPOSE FUNCTIONS TO HTML (onclick="...")
+// ------------------------------------------------------
+window.startExperience = startExperience;
+window.openShareModal = openShareModal;
+window.closeShareModal = closeShareModal;
+window.copyShareLink = copyShareLink;
+window.sendShareEmail = sendShareEmail;
