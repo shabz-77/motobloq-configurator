@@ -4,24 +4,21 @@
 import { StreamPixelApplication } from "streampixelsdk";
 
 function computeInitialResolution() {
-  // Match Streampixel's idea: scale with devicePixelRatio,
-  // keep even numbers, and clamp around 1920x1080.
   const dpr = window.devicePixelRatio || 1;
 
+  // Start from the actual device viewport in CSS pixels
   let w = Math.floor(window.innerWidth * dpr);
   let h = Math.floor(window.innerHeight * dpr);
 
-  // Make sure they’re even (UE likes even dimensions)
-  if (w % 2 === 1) w -= 1;
-  if (h % 2 === 1) h -= 1;
+  // Clamp only by the LONGEST side to avoid forcing 16:9
+  const maxSide = 1920; // you can lower to 1280 if you want less bandwidth
+  const longest = Math.max(w, h);
+  const scale = Math.min(maxSide / longest, 1);
 
-  const MAX_W = 1920;
-  const MAX_H = 1080;
-
-  const scale = Math.min(MAX_W / w, MAX_H / h, 1);
   w = Math.floor(w * scale);
   h = Math.floor(h * scale);
 
+  // Make sure they’re even (UE likes even dimensions)
   if (w % 2 === 1) w -= 1;
   if (h % 2 === 1) h -= 1;
 
