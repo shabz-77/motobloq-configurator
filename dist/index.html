@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Bentley Configurator</title>
+<link rel="icon" type="image/png" href="/assets/favicon-CdvDpW8j.png" />
+
+<meta name="viewport"
+  content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: black;
+    overflow: hidden;
+    font-family: sans-serif;
+    touch-action: none;
+  }
+
+  #stream-container {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #stream-container > * {
+    width: 100% !important;
+    height: 100% !important;
+    display: block !important;
+  }
+
+  #stream-container video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+
+  #shareBtn {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 9999;
+    padding: 10px 16px;
+    background: rgba(255,255,255,0.12);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+  }
+
+  #shareBtn:hover {
+    background: rgba(255,255,255,0.25);
+  }
+
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    right: 50%;
+    transform: translateX(50%);
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 10px 18px;
+    border-radius: 6px;
+    display: none;
+    z-index: 99999;
+  }
+
+  /* --------------------------- */
+  /* LOADING SCREEN (FIXED)      */
+  /* --------------------------- */
+  #loading-screen {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    background: black;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+  }
+
+  #loading-screen img {
+    width: 70%;
+    max-width: 900px;
+    height: auto;
+    display: block;
+    margin-bottom: 20px;
+    object-fit: contain;
+  }
+
+  #loading-screen button {
+    padding: 10px 20px;
+    font-size: 14px;
+    border-radius: 6px;
+    border: 1px solid #fff;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+  }
+
+  #loading-screen button:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  /* SHARE MODAL */
+  #shareModal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+  }
+</style>
+
+<!-- EMAILJS INIT -->
+<script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+<script>
+  emailjs.init("5peNVQjPPCax3FxNB");
+</script>
+
+<!-- MAIN JS (VITE BUNDLED) -->
+
+<!-- GOOGLE ANALYTICS -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-HCP6E3LMJP"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-HCP6E3LMJP');
+</script>
+
+<!-- VERCEL ANALYTICS -->
+<script>
+  window.va = window.va || function () {
+    (window.vaq = window.vaq || []).push(arguments);
+  };
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
+
+  <script type="module" crossorigin src="/assets/index-DHDtc8RY.js"></script>
+</head>
+
+<body>
+
+<!-- ------------------------- -->
+<!-- FIXED LOADING SCREEN      -->
+<!-- ------------------------- -->
+<div id="loading-screen">
+  <img src="/assets/loading-screen-IBIxFYZB.png" alt="Loading" />
+  <button onclick="closeLoading()">Enter Experience</button>
+</div>
+
+<!-- VIDEO STREAM CONTAINER -->
+<div id="stream-container"></div>
+
+<!-- SHARE BUTTON -->
+<button id="shareBtn" onclick="openShareModal()">Share</button>
+
+<!-- SHARE MODAL -->
+<div id="shareModal">
+  <div style="background:#111;padding:22px;border-radius:10px;width:90%;max-width:380px;color:white;">
+    <h3>Share Configuration</h3>
+
+    <label>Your Name</label>
+    <input id="share_name" style="width:100%;margin-bottom:10px;padding:8px;">
+
+    <label>Your Email</label>
+    <input id="share_email" type="email" style="width:100%;margin-bottom:10px;padding:8px;">
+
+    <label>Message (optional)</label>
+    <textarea id="share_message" rows="3" style="width:100%;margin-bottom:10px;padding:8px;"></textarea>
+
+    <button onclick="copyShareLink()" style="width:100%;padding:10px;background:#333;color:white;border:none;border-radius:6px;margin-bottom:10px;">
+      Copy Link
+    </button>
+
+    <button onclick="sendShareEmail()" style="width:100%;padding:10px;background:#007bff;color:white;border:none;border-radius:6px;margin-bottom:10px;">
+      Send to Motobloq
+    </button>
+
+    <button onclick="closeShareModal()" style="width:100%;padding:10px;background:#444;color:white;border:none;border-radius:6px;">
+      Cancel
+    </button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+</body>
+</html>

@@ -10,16 +10,21 @@ export async function initStreamPixel(context) {
   const { container } = context;
 
   // Initialize Streampixel WebSDK
-  const {
-    appStream,
-    pixelStreaming,
-    UIControl, // can still be used for stats, etc.
-  } = await StreamPixelApplication({
+  const { appStream, pixelStreaming, UIControl } =
+  await StreamPixelApplication({
     appId: "692db8484a9ae9b379c6ab79", // ✅ your project ID
     AutoConnect: true,
     touchInput: true,
     mouseInput: true,
+
+    // 🔽 From Streampixel docs
+    // Makes the stream adapt to window size like their hosted player
+    resolutionMode: "Dynamic Resolution Mode",
+
+    // Converts touch taps into mouse clicks (like Arcware fake mouse)
+    fakeMouseWithTouches: true,
   });
+
 
   // Mount video element into #stream-container
   if (container && appStream?.rootElement) {
