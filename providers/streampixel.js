@@ -3,26 +3,30 @@
 
 import { StreamPixelApplication } from "streampixelsdk";
 
-function computeInitialResolution() {
-  const dpr = window.devicePixelRatio || 1;
+function computeDynamicResolution() {
+  const baseW = 1920;
+  const baseH = 1080;
 
-  // Start from the actual device viewport in CSS pixels
-  let w = Math.floor(window.innerWidth * dpr);
-  let h = Math.floor(window.innerHeight * dpr);
+  const vw = window.innerWidth || baseW;
+  const vh = window.innerHeight || baseH;
 
-  // Clamp only by the LONGEST side to avoid forcing 16:9
-  const maxSide = 1920; // you can lower to 1280 if you want less bandwidth
-  const longest = Math.max(w, h);
-  const scale = Math.min(maxSide / longest, 1);
+  // Treat 1920x1080 as our "design" and scale to fill the *shorter* side
+  const scale = Math.max(vw / baseW, vh / baseH);
 
-  w = Math.floor(w * scale);
-  h = Math.floor(h * scale);
+  let resX = Math.round(baseW * scale);
+  let resY = Math.round(baseH * scale);
 
-  // Make sure they’re even (UE likes even dimensions)
-  if (w % 2 === 1) w -= 1;
-  if (h % 2 === 1) h -= 1;
+  // Clamp so we don't go crazy high
+  const maxW = 2560;
+  const maxH = 1440;
+  const minW = 960;
+  const minH = 540;
 
-  return { resX: w, resY: h };
+  resX = Math.min(Math.max(resX, minW), maxW);
+  resY = Math.min(Math.max(resY, minH), maxH);
+
+  console.log("📐 Dynamic resolution chosen:", { vw, vh, resX, resY });
+  return { resX, resY };
 }
 
 export async function initStreamPixel(context) {
@@ -31,36 +35,42 @@ export async function initStreamPixel(context) {
   // StreamingProvider.init() passes { container }
   const { container } = context;
 
-  // Compute a good starting resolution for the current device
-  const { resX, resY } = computeInitialResolution();
-  console.log("🎯 Initial Streampixel res:", resX, "x", resY);
-
-  // Initialize Streampixel WebSDK
+  // 1) Init Streampixel WebSDK
   const { appStream, pixelStreaming, UIControl } =
     await StreamPixelApplication({
       appId: "692db8484a9ae9b379c6ab79", // ✅ your project ID
       AutoConnect: true,
-
-      // Input settings
       touchInput: true,
       mouseInput: true,
 
-      // 🔽 Dynamic resolution like the hosted player
+      // Let their SDK know we want dynamic behavior
       resolutionMode: "Dynamic Resolution Mode",
 
       // Converts touch taps into mouse clicks (Arcware-style fake mouse)
       fakeMouseWithTouches: true,
-
-      // Start resolution used in the signalling URL (?resX=&resY=)
-      resX,
-      resY,
     });
 
-  // Mount video element into #stream-container
+  // 2) Mount the root element into our container
   if (container && appStream?.rootElement) {
     container.appendChild(appStream.rootElement);
   } else {
     console.warn("⚠️ No container or rootElement found for Streampixel");
+  }
+
+  // Helper: apply dynamic resolution to UE
+  function applyDynamicResolution() {
+    if (!appStream?.stream) return;
+
+    const { resX, resY } = computeDynamicResolution();
+
+    try {
+      // This is exactly how Streampixel’s own frontend talks to UE:
+      //   stream.emitConsoleCommand("r.SetRes 1920x1080w")
+      appStream.stream.emitConsoleCommand(`r.SetRes ${resX}x${resY}w`);
+      console.log("🎯 Sent r.SetRes to UE via Streampixel");
+    } catch (err) {
+      console.warn("⚠️ Failed to emit r.SetRes via Streampixel stream:", err);
+    }
   }
 
   // -----------------------------
@@ -70,7 +80,7 @@ export async function initStreamPixel(context) {
     console.log("📤 Streampixel → UE:", action, value);
 
     try {
-      // 1) JSON string payload (matches your Blueprint expectation)
+      // 1) JSON string payload (matches your existing Blueprint logic)
       appStream.stream.emitUIInteraction(
         JSON.stringify({ action, value })
       );
@@ -78,7 +88,10 @@ export async function initStreamPixel(context) {
       // 2) Fallback object payload
       appStream.stream.emitUIInteraction({ action, value });
     } catch (err) {
-      console.error("❌ Error sending UI interaction via Streampixel:", err);
+      console.error(
+        "❌ Error sending UI interaction via Streampixel:",
+        err
+      );
     }
   }
 
@@ -86,7 +99,6 @@ export async function initStreamPixel(context) {
   // UNREAL → FRONTEND (responses)
   // -----------------------------
   function onResponse(callback) {
-    // Unreal uses Send Pixel Streaming Response with descriptor as JSON.
     pixelStreaming.addResponseEventListener(
       "handle_responses",
       (payload) => {
@@ -116,11 +128,29 @@ export async function initStreamPixel(context) {
   function onReady(callback) {
     appStream.onVideoInitialized = () => {
       console.log("📺 Streampixel video initialized");
-      // Small delay so the first frame + layout settle
+
+      // First pass: apply dynamic res as soon as the video is live
+      applyDynamicResolution();
+
+      // Force a fake resize so Streampixel’s internal listeners
+      // (like the ones you saw in main.cfa...js) also re-run.
+      setTimeout(() => {
+        console.log("🔁 Dispatching synthetic resize for Streampixel");
+        window.dispatchEvent(new Event("resize"));
+        applyDynamicResolution(); // re-apply after the resize
+      }, 200);
+
+      // Also listen to real resizes (orientation changes, etc.)
+      window.addEventListener("resize", () => {
+        // Tiny debounce by relying on browser’s batch; this is cheap anyway
+        applyDynamicResolution();
+      });
+
+      // Finally tell your app “we’re ready”
       setTimeout(() => {
         console.log("🟢 Streampixel READY (after small delay)");
         callback();
-      }, 500);
+      }, 300);
     };
   }
 
