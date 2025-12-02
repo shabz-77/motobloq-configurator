@@ -1,348 +1,186 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Bentley Configurator</title>
+<meta charset="UTF-8" />
+<title>Bentley Configurator</title>
 
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
-  />
+<link rel="icon" type="image/png" href="favicon.png" />
 
-  <style>
-    * {
-      box-sizing: border-box;
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0,
+               user-scalable=no, viewport-fit=cover" />
+
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: black;
+    font-family: sans-serif;
+    touch-action: none;
+  }
+
+  #stream-container {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+  }
+
+  iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    display: none; /* hidden until Start Experience */
+  }
+
+  /* LOADING SCREEN */
+  #loading-screen {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    z-index: 9999;
+    background: black;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+
+  #loading-screen img {
+    width: 70%;
+    max-width: 900px;
+    margin-bottom: 20px;
+  }
+
+  /* SHARE BUTTON */
+  #shareBtn {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 9999;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.4);
+    background: rgba(255,255,255,0.12);
+    backdrop-filter: blur(8px);
+    color: white;
+    cursor: pointer;
+    display: none; /* shown after start + when stream is ready */
+  }
+
+  /* SHARE MODAL */
+  #shareModal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+  }
+
+  /* TOAST */
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.8);
+    padding: 10px 18px;
+    border-radius: 6px;
+    color: white;
+    display: none;
+    z-index: 999999;
+  }
+</style>
+
+<!-- GOOGLE ANALYTICS -->
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-NSL2J9KFP1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-NSL2J9KFP1');
+</script>
+
+<!-- VERCEL ANALYTICS -->
+<script>
+  window.va = window.va || function () {
+    (window.vaq = window.vaq || []).push(arguments);
+  };
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
+
+<!-- EMAILJS -->
+<script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+<script>
+  (function () {
+    if (typeof emailjs !== "undefined") {
+      emailjs.init("5peNVQjPPCax3FxNB");  // your public key
+      window.emailjs = emailjs;
+      console.log("✅ EmailJS initialized");
+    } else {
+      console.error("❌ EmailJS script failed to load");
     }
+  })();
+</script>
 
-    html,
-    body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-        sans-serif;
-      background: #000;
-      color: #fff;
-    }
-
-    #app {
-      width: 100%;
-      height: 100%;
-      position: relative;
-      background: #000;
-    }
-
-    #stream-container {
-      width: 100%;
-      height: 100%;
-      position: relative;
-      overflow: hidden;
-    }
-
-    #sp-frame {
-      width: 100%;
-      height: 100%;
-      border: 0;
-      display: none; /* shown when ready */
-    }
-
-    /* Loading screen */
-    #loading-screen {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: radial-gradient(circle at top, #222 0%, #000 60%);
-      z-index: 10;
-    }
-
-    #loading-inner {
-      padding: 24px 32px;
-      border-radius: 16px;
-      background: rgba(0, 0, 0, 0.7);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      text-align: center;
-      max-width: 360px;
-      width: 90%;
-    }
-
-    #loading-inner h1 {
-      margin: 0 0 8px;
-      font-size: 20px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-    }
-
-    #loading-inner p {
-      margin: 0 0 16px;
-      font-size: 14px;
-      opacity: 0.8;
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 10px 18px;
-      border-radius: 999px;
-      border: none;
-      outline: none;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 500;
-      background: #ffffff;
-      color: #000000;
-      transition: transform 0.1s ease, box-shadow 0.1s ease,
-        background 0.1s ease;
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
-    }
-
-    .btn:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.6);
-      background: #f3f3f3;
-    }
-
-    .btn-secondary {
-      background: rgba(255, 255, 255, 0.06);
-      color: #fff;
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      box-shadow: none;
-    }
-
-    .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.12);
-    }
-
-    /* Share button on top-right */
-    #shareBtn {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      z-index: 20;
-      display: none; /* shown when experience visible */
-    }
-
-    /* Modal */
-    .modal {
-      position: fixed;
-      inset: 0;
-      display: none; /* flex when open */
-      align-items: center;
-      justify-content: center;
-      background: rgba(0, 0, 0, 0.7);
-      z-index: 30;
-    }
-
-    .modal-content {
-      width: 94%;
-      max-width: 420px;
-      background: #050505;
-      border-radius: 18px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      padding: 18px 18px 16px;
-      position: relative;
-      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.9);
-    }
-
-    .modal-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
-
-    .modal-title {
-      font-size: 16px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      opacity: 0.9;
-    }
-
-    .modal-close {
-      background: transparent;
-      border: none;
-      color: #aaa;
-      font-size: 20px;
-      cursor: pointer;
-      padding: 2px 4px;
-    }
-
-    .modal-close:hover {
-      color: #fff;
-    }
-
-    .modal-body {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-bottom: 12px;
-    }
-
-    .modal-body label {
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      opacity: 0.7;
-    }
-
-    .modal-body input,
-    .modal-body textarea {
-      width: 100%;
-      border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.16);
-      background: #050505;
-      color: #fff;
-      padding: 8px 10px;
-      font-size: 13px;
-      outline: none;
-    }
-
-    .modal-body input:focus,
-    .modal-body textarea:focus {
-      border-color: rgba(255, 255, 255, 0.4);
-    }
-
-    .modal-body textarea {
-      resize: vertical;
-      min-height: 60px;
-    }
-
-    .modal-actions {
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-    }
-
-    .modal-actions .btn {
-      flex: 1;
-    }
-
-    /* Toast */
-    #toast {
-      position: fixed;
-      left: 50%;
-      bottom: 16px;
-      transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.9);
-      color: #fff;
-      padding: 8px 14px;
-      border-radius: 999px;
-      font-size: 13px;
-      display: none;
-      z-index: 40;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-    }
-
-    @media (max-width: 600px) {
-      #loading-inner {
-        padding: 20px 20px;
-      }
-
-      .modal-content {
-        padding: 16px 14px 14px;
-      }
-    }
-  </style>
 </head>
+
 <body>
-  <div id="app">
-    <!-- Loading overlay -->
-    <div id="loading-screen">
-      <div id="loading-inner">
-        <h1>Bentley Configurator</h1>
-        <p>Preparing your real-time experience…</p>
-        <button class="btn" onclick="startExperience()">Start Experience</button>
-      </div>
-    </div>
 
-    <!-- Stream container (iframe from Streampixel) -->
-    <div id="stream-container">
-      <iframe
-        id="sp-frame"
-        src="https://share.streampixel.io/your-iframe-url-here"
-        allowfullscreen
-        frameborder="0"
-      ></iframe>
+<!-- LOADING / START SCREEN -->
+<div id="loading-screen">
+  <img src="loading-screen.png" alt="Loading" />
+  <button onclick="startExperience()" style="padding:10px 20px;">Enter Experience</button>
+</div>
 
-      <button
-        id="shareBtn"
-        class="btn btn-secondary"
-        type="button"
-        onclick="openShareModal()"
-      >
-        Share
-      </button>
-    </div>
+<!-- STREAM AREA -->
+<div id="stream-container">
+  <iframe
+    id="sp-frame"
+    src="https://share.streampixel.io/692db8484a9ae9b379c6ab79"
+    allow="autoplay; fullscreen"
+    allowfullscreen
+  ></iframe>
+</div>
 
-    <!-- Share Modal -->
-    <div id="shareModal" class="modal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <div class="modal-title">Share Your Build</div>
-          <button class="modal-close" onclick="closeShareModal()">×</button>
-        </div>
+<button id="shareBtn" onclick="openShareModal()">Share</button>
 
-        <div class="modal-body">
-          <div>
-            <label for="share_name">Name</label>
-            <input id="share_name" type="text" placeholder="Your name" />
-          </div>
+<!-- SHARE MODAL -->
+<div id="shareModal">
+  <div style="background:#111;padding:22px;border-radius:10px;width:90%;max-width:380px;color:white;">
+    <h3>Share Configuration</h3>
 
-          <div>
-            <label for="share_email">Email</label>
-            <input
-              id="share_email"
-              type="email"
-              placeholder="you@example.com"
-            />
-          </div>
+    <label>Your Name</label>
+    <input id="share_name" style="width:100%;margin-bottom:10px;padding:8px;">
 
-          <div>
-            <label for="share_message">Message (optional)</label>
-            <textarea
-              id="share_message"
-              rows="3"
-              placeholder="Notes about this configuration"
-            ></textarea>
-          </div>
-        </div>
+    <label>Your Email</label>
+    <input id="share_email" type="email" style="width:100%;margin-bottom:10px;padding:8px;">
 
-        <div class="modal-actions">
-          <button class="btn btn-secondary" type="button" onclick="copyShareLink()">
-            Copy Link
-          </button>
-          <button class="btn" type="button" onclick="sendShareEmail()">
-            Send to Motobloq
-          </button>
-        </div>
-      </div>
-    </div>
+    <label>Message (optional)</label>
+    <textarea id="share_message" rows="3" style="width:100%;margin-bottom:10px;padding:8px;"></textarea>
 
-    <!-- Toast -->
-    <div id="toast"></div>
+    <button onclick="copyShareLink()" style="width:100%;padding:10px;background:#333;color:white;border:none;border-radius:6px;margin-bottom:10px;">
+      Copy Link
+    </button>
+
+    <button onclick="sendShareEmail()" style="width:100%;padding:10px;background:#007bff;color:white;border:none;border-radius:6px;margin-bottom:10px;">
+      Send to Motobloq
+    </button>
+
+    <button onclick="closeShareModal()" style="width:100%;padding:10px;background:#444;color:white;border:none;border-radius:6px;">
+      Cancel
+    </button>
   </div>
+</div>
 
-  <!-- EmailJS CDN + init -->
-  <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
-  <script>
-    (function () {
-      if (typeof emailjs !== "undefined") {
-        // TODO: keep your own public key here
-        emailjs.init("5peNVQjPPCax3FxNB");
-        window.emailjs = emailjs;
-        console.log("✅ EmailJS initialized");
-      } else {
-        console.error("❌ EmailJS script failed to load");
-      }
-    })();
-  </script>
+<div id="toast"></div>
 
-  <!-- Main app logic -->
-  <script type="module" src="/main.js"></script>
+<script type="module" src="main.js"></script>
+
 </body>
 </html>

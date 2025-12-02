@@ -1,104 +1,138 @@
-// main.js (iframe version with URL config + EmailJS)
+// main.js — IFRAME VERSION
 
-import { StreamingProvider } from "./providers/streaming-provider.js";
-
-let provider = null;
+console.log("Iframe Mode Enabled");
 
 // ------------------------------------------------------
-// CONFIG STATE: URL params + localStorage
+// GLOBALS
 // ------------------------------------------------------
+const iframe = document.getElementById("sp-frame");
 let configState = {};
+let streamReady = false;
+let configAppliedOnce = false;
 
-const stored = localStorage.getItem("userSpec");
-if (stored) {
-  try {
-    configState = JSON.parse(stored) || {};
-  } catch {
-    configState = {};
-  }
+// Load from localStorage
+try {
+  configState = JSON.parse(localStorage.getItem("userSpec") || "{}");
+} catch {
+  configState = {};
 }
 
-// If URL has no params, allow a fresh start
-if (window.location.search.length <= 1) {
-  // Only clear if you want a "clean" session on bare URL:
-  // localStorage.removeItem("userSpec");
+// ------------------------------------------------------
+// APPLY URL CONFIG INTO STATE
+// ------------------------------------------------------
+const params = new URLSearchParams(window.location.search);
+const loadedConfig = {};
+params.forEach((v, k) => (loadedConfig[k] = v));
+
+if (Object.keys(loadedConfig).length > 0) {
+  console.log("🔗 Loaded URL config:", loadedConfig);
+  configState = { ...configState, ...loadedConfig };
+  localStorage.setItem("userSpec", JSON.stringify(configState));
 } else {
-  // Merge URL params into configState
-  const params = new URLSearchParams(window.location.search);
-  const loadedConfig = {};
-
-  params.forEach((value, key) => {
-    loadedConfig[key] = value;
-  });
-
-  if (Object.keys(loadedConfig).length > 0) {
-    console.log("🔗 Loaded URL config:", loadedConfig);
-    configState = { ...configState, ...loadedConfig };
-    localStorage.setItem("userSpec", JSON.stringify(configState));
-  }
+  console.log("ℹ️ No URL config in URL");
 }
 
 // ------------------------------------------------------
-// UTIL: Toast
+// FRONTEND → UE SENDER (via iframe postMessage)
 // ------------------------------------------------------
-function showToast(message) {
-  const toast = document.getElementById("toast");
-  if (!toast) return;
-  toast.textContent = message;
-  toast.style.display = "block";
-  setTimeout(() => {
-    toast.style.display = "none";
-  }, 2500);
-}
+function sendToUnreal(action, value) {
+  console.log("📤 Sending to UE:", action, value);
 
-// ------------------------------------------------------
-// UE <-> JS helpers
-// ------------------------------------------------------
-function applyConfigToStream(currentProvider) {
-  if (!currentProvider) {
-    console.warn("Provider not ready yet; cannot apply config.");
+  if (!iframe || !iframe.contentWindow) {
+    console.warn("⚠️ iframe not ready yet, cannot send message");
     return;
   }
 
+  // Streampixel: custom JSON to Unreal. Your BP should read field "message"
+  iframe.contentWindow.postMessage(
+    {
+      message: JSON.stringify({ action, value }),
+    },
+    "https://share.streampixel.io"
+  );
+}
+
+// Apply configState to Unreal once stream is ready
+function applyConfigIfReady() {
+  if (!streamReady) {
+    console.log("⏳ Stream not ready yet; will apply config later.");
+    return;
+  }
+  if (configAppliedOnce) {
+    console.log("✅ Config already applied once; skipping.");
+    return;
+  }
   if (!configState || Object.keys(configState).length === 0) {
-    console.log("No configState to apply on startup.");
+    console.log("ℹ️ No configState to apply.");
     return;
   }
 
-  console.log("🚀 Applying initial config to stream:", configState);
+  console.log("🚀 Applying config to stream:", configState);
+  configAppliedOnce = true;
 
   let delay = 0;
-  const delayStep = 250; // ms between sends
+  const delayStep = 300; // ms between variant messages
 
   Object.entries(configState).forEach(([action, value]) => {
-    setTimeout(() => {
-      try {
-        currentProvider.send({ action, value });
-        console.log("Sent initial:", action, value);
-      } catch (err) {
-        console.error("Error sending initial config:", err);
-      }
-    }, delay);
-
+    setTimeout(() => sendToUnreal(action, value), delay);
     delay += delayStep;
   });
 }
 
-function handleProviderResponse(raw) {
-  let msg = raw;
+// ------------------------------------------------------
+// UE → JS LISTENER (config updates + stream state)
+// ------------------------------------------------------
+window.addEventListener("message", (event) => {
+  // Only trust Streampixel iframe messages
+  if (event.origin !== "https://share.streampixel.io") return;
 
-  // String -> try to parse JSON
-  if (typeof msg === "string") {
+  const data = event.data;
+  if (!data) return;
+
+  // 1) Stream state (ready when loadingComplete)
+  if (data.type === "stream-state") {
+    console.log("🎛 Stream state:", data.value);
+
+    if (data.value === "loadingComplete") {
+      console.log("🟢 Streampixel stream ready (loadingComplete)");
+      streamReady = true;
+
+      // Show share button only when stream is actually ready AND user has entered
+      const iframeEl = document.getElementById("sp-frame");
+      const loading = document.getElementById("loading-screen");
+      const shareBtn = document.getElementById("shareBtn");
+
+      // If user already clicked "Enter Experience", loading is hidden and iframe visible.
+      // If not clicked yet, we keep hero visible; only when they click we show iframe.
+
+      if (iframeEl && iframeEl.style.display === "block" && shareBtn) {
+        shareBtn.style.display = "inline-block";
+      }
+
+      // Now apply any URL/localStorage config
+      applyConfigIfReady();
+    }
+
+    return; // done handling stream-state
+  }
+
+  // 2) Custom responses from Unreal (via Send Pixel Streaming Response)
+  //    Most likely a JSON string or an object containing a JSON string
+  let msg = data;
+
+  // If Unreal sends a plain string (Descriptor)
+  if (typeof data === "string") {
     try {
-      msg = JSON.parse(msg);
+      msg = JSON.parse(data);
     } catch {
-      console.log("📥 UE → JS (string, not JSON):", msg);
+      // Not JSON, ignore or log
+      console.log("📥 UE → JS (string, not JSON):", data);
       return;
     }
   }
 
-  // If wrapped in { message: "..." }
-  if (msg && typeof msg === "object" && typeof msg.message === "string") {
+  // If Unreal wraps JSON in `message` field: { message: "{...}" }
+  if (typeof msg === "object" && typeof msg.message === "string") {
     try {
       msg = JSON.parse(msg.message);
     } catch {
@@ -107,74 +141,103 @@ function handleProviderResponse(raw) {
     }
   }
 
-  if (!msg || typeof msg !== "object") return;
-
-  // Mirror WebSDK behavior: VS_ fields define our config
-  if (msg.action && msg.action.startsWith("VS_") && msg.value && msg.value !== "None") {
-    configState[msg.action] = msg.value;
-    localStorage.setItem("userSpec", JSON.stringify(configState));
-    console.log("💾 Saved from UE:", msg.action, "=", msg.value);
-  } else {
-    console.log("📥 UE → JS payload:", msg);
-  }
-}
-
-// ------------------------------------------------------
-// INIT STREAMING PROVIDER (Streampixel iframe)
-// ------------------------------------------------------
-async function initStreaming() {
-  try {
-    provider = await StreamingProvider.init("streampixel");
-    console.log("✅ StreamingProvider initialized (streampixel iframe).");
-
-    // Unreal → JS
-    if (typeof provider.onResponse === "function") {
-      provider.onResponse((message) => {
-        handleProviderResponse(message);
-      });
-    }
-
-    // Use stream-state if your provider exposes it
-    if (typeof provider.onStreamState === "function") {
-      provider.onStreamState((state) => {
-        console.log("🎛 Stream state:", state);
-        if (state === "loadingComplete") {
-          onStreamReady();
-        }
-      });
+  if (typeof msg === "object" && msg !== null) {
+    // Mirror the WebSDK behavior: store VS_ selections
+    if (msg.action?.startsWith("VS_") && msg.value && msg.value !== "None") {
+      configState[msg.action] = msg.value;
+      localStorage.setItem("userSpec", JSON.stringify(configState));
+      console.log("💾 Saved from UE:", msg.action, "=", msg.value);
     } else {
-      // Fallback: apply config after small delay
-      console.log("No onStreamState hook; using timeout fallback.");
-      setTimeout(() => {
-        onStreamReady();
-      }, 3000);
+      console.log("📥 UE → JS (other payload):", msg);
     }
-  } catch (err) {
-    console.error("Error initializing StreamingProvider:", err);
   }
-}
-
-function onStreamReady() {
-  console.log("🟢 Stream ready (onStreamReady called).");
-
-  const loading = document.getElementById("loading-screen");
-  const iframeEl = document.getElementById("sp-frame");
-  const shareBtn = document.getElementById("shareBtn");
-
-  if (loading) loading.style.display = "none";
-  if (iframeEl) iframeEl.style.display = "block";
-  if (shareBtn) shareBtn.style.display = "inline-flex";
-
-  applyConfigToStream(provider);
-}
-
-// Kick off streaming when page loads
-window.addEventListener("load", () => {
-  initStreaming();
 });
 
 // ------------------------------------------------------
-// UI: Start Experience + Share Modal
+// TOAST
+// ------------------------------------------------------
+function toast(msg) {
+  const t = document.getElementById("toast");
+  if (!t) return;
+  t.innerText = msg;
+  t.style.display = "block";
+  setTimeout(() => (t.style.display = "none"), 2500);
+}
+
+// ------------------------------------------------------
+// SHARE LINK HANDLING
+// ------------------------------------------------------
+function buildShareUrl() {
+  const params = new URLSearchParams(configState);
+  const qs = params.toString();
+  return `${window.location.origin}${window.location.pathname}${qs ? "?" + qs : ""}`;
+}
+
+function copyShareLink() {
+  const url = buildShareUrl();
+
+  navigator.clipboard.writeText(url).then(
+    () => {
+      toast("Copied link!");
+    },
+    () => {
+      alert("Unable to copy link.");
+    }
+  );
+
+  // Silent email tracking (optional)
+  if (window.emailjs) {
+    window.emailjs
+      .send("service_x60sll8", "template_0gersxn", {
+        user_name: "Silent Event",
+        user_email: "system@motobloq.com",
+        user_message: "User copied share link",
+        config_url: url,
+      })
+      .then(() => console.log("Silent EmailJS event sent"))
+      .catch((err) => console.error("EmailJS silent send error:", err));
+  } else {
+    console.warn("EmailJS not loaded, skipping silent email");
+  }
+}
+
+function sendShareEmail() {
+  const name = document.getElementById("share_name")?.value.trim();
+  const email = document.getElementById("share_email")?.value.trim();
+  const msg = document.getElementById("share_message")?.value.trim();
+
+  if (!name || !email) {
+    alert("Please enter name + email.");
+    return;
+  }
+
+  const url = buildShareUrl();
+
+  if (!window.emailjs) {
+    alert("Email service not loaded.");
+    console.error("window.emailjs is not available");
+    return;
+  }
+
+  window.emailjs
+    .send("service_x60sll8", "template_0gersxn", {
+      user_name: name,
+      user_email: email,
+      user_message: msg,
+      config_url: url,
+    })
+    .then(() => {
+      toast("Email sent!");
+      closeShareModal();
+    })
+    .catch((err) => {
+      console.error("EmailJS send error:", err);
+      alert("Email failed. Check console for details.");
+    });
+}
+
+// ------------------------------------------------------
+// UI CONTROLS: START EXPERIENCE + SHARE MODAL
 // ------------------------------------------------------
 function startExperience() {
   const loading = document.getElementById("loading-screen");
@@ -183,9 +246,12 @@ function startExperience() {
 
   if (loading) loading.style.display = "none";
   if (iframeEl) iframeEl.style.display = "block";
-  if (shareBtn) shareBtn.style.display = "inline-flex";
 
-  // Optional analytics
+  // Only show Share button if stream is already ready
+  if (shareBtn && streamReady) {
+    shareBtn.style.display = "inline-block";
+  }
+
   if (window.gtag) {
     window.gtag("event", "start_experience", {
       event_category: "engagement",
@@ -204,93 +270,7 @@ function closeShareModal() {
 }
 
 // ------------------------------------------------------
-// SHARE LINK + EMAILJS
-// ------------------------------------------------------
-function buildConfigUrl() {
-  const params = new URLSearchParams(configState);
-  const qs = params.toString();
-  return `${window.location.origin}${window.location.pathname}${qs ? "?" + qs : ""}`;
-}
-
-function getEmailJs() {
-  const ej = window.emailjs;
-  if (!ej) {
-    console.error("❌ window.emailjs is not available");
-    return null;
-  }
-  return ej;
-}
-
-function copyShareLink() {
-  const url = buildConfigUrl();
-  navigator.clipboard.writeText(url).then(
-    () => {
-      showToast("Copied link!");
-    },
-    () => {
-      alert("Unable to copy link.");
-    }
-  );
-
-  // Optional silent tracking email
-  const ej = getEmailJs();
-  if (!ej) return;
-
-  ej
-    .send("service_x60sll8", "template_0gersxn", {
-      user_name: "Silent Event",
-      user_email: "system@motobloq.com",
-      user_message: "User copied share link",
-      config_url: url,
-    })
-    .then(() => {
-      console.log("Silent EmailJS event sent.");
-    })
-    .catch((err) => {
-      console.error("EmailJS silent send error:", err);
-    });
-}
-
-function sendShareEmail() {
-  const nameInput = document.getElementById("share_name");
-  const emailInput = document.getElementById("share_email");
-  const msgInput = document.getElementById("share_message");
-
-  const name = nameInput?.value.trim();
-  const email = emailInput?.value.trim();
-  const message = msgInput?.value.trim();
-
-  if (!name || !email) {
-    alert("Please enter your name and email.");
-    return;
-  }
-
-  const url = buildConfigUrl();
-  const ej = getEmailJs();
-  if (!ej) {
-    alert("Email service is not available.");
-    return;
-  }
-
-  ej
-    .send("service_x60sll8", "template_0gersxn", {
-      user_name: name,
-      user_email: email,
-      user_message: message,
-      config_url: url,
-    })
-    .then(() => {
-      showToast("Email sent!");
-      closeShareModal();
-    })
-    .catch((err) => {
-      console.error("EmailJS send error:", err);
-      alert("Error sending email. Check console for details.");
-    });
-}
-
-// ------------------------------------------------------
-// Expose UI functions for inline onclick="..."
+// EXPOSE FUNCTIONS FOR HTML onclick="..."
 // ------------------------------------------------------
 window.startExperience = startExperience;
 window.openShareModal = openShareModal;
