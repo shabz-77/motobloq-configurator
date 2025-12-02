@@ -3,10 +3,12 @@
 <head>
 <meta charset="UTF-8" />
 <title>Bentley Configurator</title>
+
 <link rel="icon" type="image/png" href="favicon.png" />
 
 <meta name="viewport"
-  content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0,
+               user-scalable=no, viewport-fit=cover" />
 
 <style>
   html, body {
@@ -14,8 +16,8 @@
     padding: 0;
     width: 100%;
     height: 100%;
-    background: black;
     overflow: hidden;
+    background: black;
     font-family: sans-serif;
     touch-action: none;
   }
@@ -24,91 +26,48 @@
     width: 100vw;
     height: 100vh;
     position: relative;
-    overflow: hidden;
   }
 
-  #stream-container > * {
-    width: 100% !important;
-    height: 100% !important;
-    display: block !important;
-  }
-
-  #stream-container video {
+  iframe {
     width: 100%;
     height: 100%;
-    object-fit: contain; /* revert to contain */
-    display: block;
+    border: none;
+    display: none; /* hidden until Start Experience */
   }
 
+  /* LOADING SCREEN */
+  #loading-screen {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    z-index: 9999;
+    background: black;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+
+  #loading-screen img {
+    width: 70%;
+    max-width: 900px;
+    margin-bottom: 20px;
+  }
+
+  /* SHARE BUTTON */
   #shareBtn {
     position: fixed;
     top: 12px;
     right: 12px;
     z-index: 9999;
     padding: 10px 16px;
-    background: rgba(255,255,255,0.12);
-    color: white;
-    border: 1px solid rgba(255,255,255,0.4);
     border-radius: 8px;
-    font-size: 14px;
-    cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.4);
+    background: rgba(255,255,255,0.12);
     backdrop-filter: blur(8px);
-  }
-
-  #shareBtn:hover {
-    background: rgba(255,255,255,0.25);
-  }
-
-  #toast {
-    position: fixed;
-    bottom: 20px;
-    right: 50%;
-    transform: translateX(50%);
-    background: rgba(0,0,0,0.8);
     color: white;
-    padding: 10px 18px;
-    border-radius: 6px;
-    display: none;
-    z-index: 99999;
-  }
-
-  /* --------------------------- */
-  /* LOADING SCREEN (FIXED)      */
-  /* --------------------------- */
-  #loading-screen {
-    position: fixed;
-    top: 0; left: 0;
-    width: 100%;
-    height: 100%;
-    background: black;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
-  }
-
-  #loading-screen img {
-    width: 70%;
-    max-width: 900px;
-    height: auto;
-    display: block;
-    margin-bottom: 20px;
-    object-fit: contain;
-  }
-
-  #loading-screen button {
-    padding: 10px 20px;
-    font-size: 14px;
-    border-radius: 6px;
-    border: 1px solid #fff;
-    background: transparent;
-    color: #fff;
     cursor: pointer;
-  }
-
-  #loading-screen button:hover {
-    background: rgba(255, 255, 255, 0.15);
+    display: none; /* shown after start */
   }
 
   /* SHARE MODAL */
@@ -121,24 +80,31 @@
     justify-content: center;
     z-index: 99999;
   }
+
+  /* TOAST */
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.8);
+    padding: 10px 18px;
+    border-radius: 6px;
+    color: white;
+    display: none;
+    z-index: 999999;
+  }
 </style>
 
-<!-- EMAILJS INIT -->
-<script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
-<script>
-  emailjs.init("5peNVQjPPCax3FxNB");
-</script>
-
-<!-- MAIN JS (VITE BUNDLED) -->
-<script type="module" src="/main.js"></script>
-
 <!-- GOOGLE ANALYTICS -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-HCP6E3LMJP"></script>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-NSL2J9KFP1"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-  gtag('config', 'G-HCP6E3LMJP');
+
+  gtag('config', 'G-NSL2J9KFP1');
 </script>
 
 <!-- VERCEL ANALYTICS -->
@@ -149,22 +115,27 @@
 </script>
 <script defer src="/_vercel/insights/script.js"></script>
 
+<!-- EMAILJS -->
+<script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+<script> emailjs.init("5peNVQjPPCax3FxNB"); </script>
+
 </head>
 
 <body>
 
-<!-- ------------------------- -->
-<!-- FIXED LOADING SCREEN      -->
-<!-- ------------------------- -->
+<!-- LOADING / START SCREEN -->
 <div id="loading-screen">
   <img src="loading-screen.png" alt="Loading" />
-  <button onclick="closeLoading()">Enter Experience</button>
+  <button onclick="startExperience()" style="padding:10px 20px;">Enter Experience</button>
 </div>
 
-<!-- VIDEO STREAM CONTAINER -->
-<div id="stream-container"></div>
+<!-- STREAM AREA -->
+<div id="stream-container">
+  <iframe id="sp-frame"
+    src="https://share.streampixel.io/692db8484a9ae9b379c6ab79">
+  </iframe>
+</div>
 
-<!-- SHARE BUTTON -->
 <button id="shareBtn" onclick="openShareModal()">Share</button>
 
 <!-- SHARE MODAL -->
@@ -195,8 +166,9 @@
   </div>
 </div>
 
-<!-- TOAST -->
 <div id="toast"></div>
+
+<script type="module" src="main.js"></script>
 
 </body>
 </html>

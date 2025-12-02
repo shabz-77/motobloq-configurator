@@ -1,160 +1,132 @@
-// main.js
-import { StreamingProvider } from "./providers/streaming-provider.js";
+// main.js — FULL COPY/PASTE
 
-/**
- * Make closeLoading available for the inline onclick in index.html
- * We attach this BEFORE any async/await so it's ready immediately.
- */
-window.closeLoading = () => {
-  const loader = document.getElementById("loading-screen");
-  if (loader) loader.style.display = "none";
-};
+console.log("Iframe Mode Enabled");
 
-// -------------------------
-// UI helpers (toast + modal)
-// -------------------------
-function showToast(msg) {
-  const t = document.getElementById("toast");
-  if (!t) return;
-  t.innerText = msg;
-  t.style.display = "block";
-  setTimeout(() => (t.style.display = "none"), 2000);
-}
-
-window.openShareModal = () => {
-  const el = document.getElementById("shareModal");
-  if (el) el.style.display = "flex";
-};
-
-window.closeShareModal = () => {
-  const el = document.getElementById("shareModal");
-  if (el) el.style.display = "none";
-};
-
-// -------------------------
-// MAIN APP LOGIC
-// -------------------------
-
-// Provider (Streampixel by default)
-const provider = await StreamingProvider.init("streampixel");
-
-// CONFIG STATE
+// ------------------------------------------------------
+// GLOBALS
+// ------------------------------------------------------
+const iframe = document.getElementById("sp-frame");
 let configState = JSON.parse(localStorage.getItem("userSpec") || "{}");
 
-// If there are NO query params, reset saved config to avoid stale state
+// Reset config only if user manually loads clean URL
 if (window.location.search.length <= 1) {
   configState = {};
   localStorage.removeItem("userSpec");
 }
 
-// UE → WEB (save VS_ values when user clicks options)
-provider.onResponse((data) => {
-  try {
+// ------------------------------------------------------
+// UE → JS LISTENER
+// ------------------------------------------------------
+window.addEventListener("message", (event) => {
+  const data = event.data;
+  if (!data) return;
+
+  // 🔥 Streampixel standard response type
+  if (data.type === "sp-response") {
+    console.log("📥 UE → JS:", data);
+
     if (data.action?.startsWith("VS_") && data.value !== "None") {
       configState[data.action] = data.value;
       localStorage.setItem("userSpec", JSON.stringify(configState));
-      console.log("✅ Saved from UE:", data.action, "=", data.value);
+      console.log("💾 Saved:", data.action, "=", data.value);
     }
-  } catch (err) {
-    console.warn("Failed to handle response:", err);
   }
 });
 
-// Parse URL config immediately
+// ------------------------------------------------------
+// FRONTEND → UE SENDER
+// ------------------------------------------------------
+function send(action, value) {
+  console.log("📤 Sending to UE:", action, value);
+
+  iframe.contentWindow.postMessage(
+    {
+      type: "sp-send",      // REQUIRED
+      action,
+      value,
+    },
+    "*"
+  );
+}
+
+// ------------------------------------------------------
+// APPLY URL CONFIG
+// ------------------------------------------------------
 const params = new URLSearchParams(window.location.search);
 const loadedConfig = {};
+
 params.forEach((v, k) => (loadedConfig[k] = v));
 
 if (Object.keys(loadedConfig).length > 0) {
-  console.log("✅ Found config in URL:", loadedConfig);
+  console.log("🔗 Loaded URL config:", loadedConfig);
   configState = { ...loadedConfig };
   localStorage.setItem("userSpec", JSON.stringify(configState));
-} else {
-  console.info("ℹ️ No URL config to apply");
 }
 
-// When stream is ready, hide loader & apply URL config (if any)
-provider.onReady(() => {
-  console.log("🟢 Stream Ready!");
-
-  // Hide loading screen (if still visible)
-  const loader = document.getElementById("loading-screen");
-  if (loader) loader.style.display = "none";
-
-  // Apply URL config to Unreal if present
-  if (Object.keys(loadedConfig).length > 0) {
-    console.log("✅ Applying URL config to UE...");
+// ------------------------------------------------------
+// WAIT FOR IFRAME READY → THEN APPLY CONFIG
+// ------------------------------------------------------
+window.addEventListener("message", (event) => {
+  if (event.data?.type === "sp-ready") {
+    console.log("🟢 Streampixel Player Ready");
 
     let delay = 0;
-    const delayStep = 300; // small spacing between messages
+    const delayStep = 300;
 
-    Object.entries(loadedConfig).forEach(([action, value]) => {
-      setTimeout(() => {
-        console.log(`📤 Sending from URL: ${action} = ${value}`);
-        provider.send(action, value);
-      }, delay);
+    Object.entries(configState).forEach(([action, value]) => {
+      setTimeout(() => send(action, value), delay);
       delay += delayStep;
     });
   }
 });
 
-// -------------------------
-// SHARE LINK + EMAIL
-// -------------------------
+// ------------------------------------------------------
+// SHARE LINK HANDLING
+// ------------------------------------------------------
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.innerText = msg;
+  t.style.display = "block";
+  setTimeout(() => (t.style.display = "none"), 2500);
+}
 
-// COPY LINK + silent email to Motobloq
 window.copyShareLink = () => {
-  const urlParams = new URLSearchParams(configState);
-  const url = `${window.location.origin}${window.location.pathname}?${urlParams.toString()}`;
+  const params = new URLSearchParams(configState);
+  const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
 
-  navigator.clipboard.writeText(url).then(() => showToast("Link copied!"));
+  navigator.clipboard.writeText(url);
+  toast("Copied link!");
 
-  if (typeof emailjs !== "undefined") {
-    emailjs.send("service_x60sll8", "template_0gersxn", {
-      user_name: "Silent Event",
-      user_email: "system@motobloq.com",
-      user_message: "User copied share link",
-      config_url: url,
-    });
-  } else {
-    console.warn("emailjs not loaded, skipping silent email");
-  }
+  // Silent email tracking
+  emailjs.send("service_x60sll8", "template_0gersxn", {
+    user_name: "Silent Event",
+    user_email: "system@motobloq.com",
+    user_message: "User copied share link",
+    config_url: url,
+  });
 };
 
-// Send config + user info to Motobloq
+// If you have a share modal and form:
 window.sendShareEmail = () => {
-  const nameEl = document.getElementById("share_name");
-  const emailEl = document.getElementById("share_email");
-  const messageEl = document.getElementById("share_message");
-
-  const name = nameEl?.value.trim() ?? "";
-  const email = emailEl?.value.trim() ?? "";
-  const message = messageEl?.value.trim() ?? "";
+  const name = document.getElementById("share_name").value.trim();
+  const email = document.getElementById("share_email").value.trim();
+  const msg = document.getElementById("share_message").value.trim();
 
   if (!name || !email) {
-    alert("Please enter your name and email.");
+    alert("Please enter name + email.");
     return;
   }
 
-  const urlParams = new URLSearchParams(configState);
-  const url = `${window.location.origin}${window.location.pathname}?${urlParams.toString()}`;
-
-  if (typeof emailjs === "undefined") {
-    console.error("emailjs is not loaded");
-    alert("Email service not available.");
-    return;
-  }
+  const params = new URLSearchParams(configState);
+  const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
 
   emailjs
     .send("service_x60sll8", "template_0gersxn", {
       user_name: name,
       user_email: email,
-      user_message: message,
+      user_message: msg,
       config_url: url,
     })
-    .then(() => {
-      showToast("Email sent!");
-      window.closeShareModal();
-    })
-    .catch(() => alert("Error sending email."));
+    .then(() => toast("Email sent!"))
+    .catch(() => alert("Email failed."));
 };
