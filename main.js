@@ -1,4 +1,4 @@
-// main.js — FULL COPY/PASTE
+// main.js — IFRAME VERSION
 
 console.log("Iframe Mode Enabled");
 
@@ -15,47 +15,7 @@ if (window.location.search.length <= 1) {
 }
 
 // ------------------------------------------------------
-// UE → JS LISTENER
-// ------------------------------------------------------
-window.addEventListener("message", (event) => {
-  const data = event.data;
-  if (!data) return;
-
-  // 🔥 Streampixel standard response type
-  if (data.type === "sp-response") {
-    console.log("📥 UE → JS:", data);
-
-    if (data.action?.startsWith("VS_") && data.value !== "None") {
-      configState[data.action] = data.value;
-      localStorage.setItem("userSpec", JSON.stringify(configState));
-      console.log("💾 Saved:", data.action, "=", data.value);
-    }
-  }
-});
-
-// ------------------------------------------------------
-// FRONTEND → UE SENDER
-// ------------------------------------------------------
-function send(action, value) {
-  console.log("📤 Sending to UE:", action, value);
-
-  if (!iframe || !iframe.contentWindow) {
-    console.warn("⚠️ iframe not ready yet, cannot send message");
-    return;
-  }
-
-  iframe.contentWindow.postMessage(
-    {
-      type: "sp-send", // REQUIRED by Streampixel iframe bridge
-      action,
-      value,
-    },
-    "*"
-  );
-}
-
-// ------------------------------------------------------
-// APPLY URL CONFIG
+// APPLY URL CONFIG INTO STATE
 // ------------------------------------------------------
 const params = new URLSearchParams(window.location.search);
 const loadedConfig = {};
@@ -64,24 +24,107 @@ params.forEach((v, k) => (loadedConfig[k] = v));
 
 if (Object.keys(loadedConfig).length > 0) {
   console.log("🔗 Loaded URL config:", loadedConfig);
+  // FIXED: spread instead of syntax error
   configState = { ...loadedConfig };
   localStorage.setItem("userSpec", JSON.stringify(configState));
+} else {
+  console.log("ℹ️ No URL config in URL");
 }
 
 // ------------------------------------------------------
-// WAIT FOR IFRAME READY → THEN APPLY CONFIG
+// FRONTEND → UE SENDER (via iframe postMessage)
+// ------------------------------------------------------
+function sendToUnreal(action, value) {
+  console.log("📤 Sending to UE:", action, value);
+
+  if (!iframe || !iframe.contentWindow) {
+    console.warn("⚠️ iframe not ready yet, cannot send message");
+    return;
+  }
+
+  // Match Streampixel Unreal JSON guide: send JSON in "message" field
+  // Unreal side: Get JSON String Value with Field Name "message"
+  iframe.contentWindow.postMessage(
+    {
+      message: JSON.stringify({ action, value }),
+    },
+    "https://share.streampixel.io"
+  );
+}
+
+// ------------------------------------------------------
+// UE → JS LISTENER (config updates + ready state)
 // ------------------------------------------------------
 window.addEventListener("message", (event) => {
-  if (event.data?.type === "sp-ready") {
-    console.log("🟢 Streampixel Player Ready");
+  // Only trust Streampixel iframe messages
+  if (event.origin !== "https://share.streampixel.io") return;
 
-    let delay = 0;
-    const delayStep = 300; // ms between variant messages
+  const data = event.data;
+  if (!data) return;
 
-    Object.entries(configState).forEach(([action, value]) => {
-      setTimeout(() => send(action, value), delay);
-      delay += delayStep;
-    });
+  // 1) Stream state (ready when loadingComplete)
+  if (data.type === "stream-state") {
+    console.log("🎛 Stream state:", data.value);
+
+    if (data.value === "loadingComplete") {
+      console.log("🟢 Streampixel stream ready (loadingComplete)");
+
+      // Hide loading screen & show iframe + share button
+      const loading = document.getElementById("loading-screen");
+      const iframeEl = document.getElementById("sp-frame");
+      const shareBtn = document.getElementById("shareBtn");
+
+      if (loading) loading.style.display = "none";
+      if (iframeEl) iframeEl.style.display = "block";
+      if (shareBtn) shareBtn.style.display = "inline-block";
+
+      // Re-apply any saved config (URL or localStorage)
+      let delay = 0;
+      const delayStep = 300; // ms between variant messages
+
+      Object.entries(configState).forEach(([action, value]) => {
+        setTimeout(() => sendToUnreal(action, value), delay);
+        delay += delayStep;
+      });
+    }
+
+    return; // done handling stream-state
+  }
+
+  // 2) Custom responses from Unreal (via Send Pixel Streaming Response)
+  //    Most likely a JSON string or an object containing a JSON string
+  let msg = data;
+
+  // If Unreal sends a plain string (Descriptor)
+  if (typeof data === "string") {
+    try {
+      msg = JSON.parse(data);
+    } catch {
+      // Not JSON, ignore or log
+      console.log("📥 UE → JS (string, not JSON):", data);
+      return;
+    }
+  }
+
+  // If Unreal wraps JSON in `message` field: { message: "{...}" }
+  if (typeof msg === "object" && typeof msg.message === "string") {
+    try {
+      msg = JSON.parse(msg.message);
+    } catch {
+      console.log("📥 UE → JS (message not JSON):", msg);
+      return;
+    }
+  }
+
+  if (typeof msg === "object" && msg !== null) {
+    // Mirror the WebSDK behavior: store VS_ selections
+    if (msg.action?.startsWith("VS_") && msg.value && msg.value !== "None") {
+      configState[msg.action] = msg.value;
+      localStorage.setItem("userSpec", JSON.stringify(configState));
+      console.log("💾 Saved from UE:", msg.action, "=", msg.value);
+    } else {
+      console.log("📥 UE → JS (other payload):", msg);
+    }
   }
 });
 
@@ -97,7 +140,7 @@ function toast(msg) {
 }
 
 // ------------------------------------------------------
-// SHARE LINK HANDLING
+// SHARE LINK HANDLING (same behavior as WebSDK version)
 // ------------------------------------------------------
 function copyShareLink() {
   const params = new URLSearchParams(configState);
@@ -114,6 +157,8 @@ function copyShareLink() {
       user_message: "User copied share link",
       config_url: url,
     });
+  } else {
+    console.warn("EmailJS not loaded, skipping silent email");
   }
 }
 
@@ -148,6 +193,7 @@ function sendShareEmail() {
 
 // ------------------------------------------------------
 // UI CONTROLS: START EXPERIENCE + SHARE MODAL
+// (kept same as your iframe version)
 // ------------------------------------------------------
 function startExperience() {
   const loading = document.getElementById("loading-screen");
@@ -158,7 +204,6 @@ function startExperience() {
   if (iframeEl) iframeEl.style.display = "block";
   if (shareBtn) shareBtn.style.display = "inline-block";
 
-  // Optional: Google Analytics event
   if (window.gtag) {
     window.gtag("event", "start_experience", {
       event_category: "engagement",
@@ -177,7 +222,7 @@ function closeShareModal() {
 }
 
 // ------------------------------------------------------
-// EXPOSE FUNCTIONS TO HTML (onclick="...")
+// EXPOSE FUNCTIONS FOR HTML onclick="..."
 // ------------------------------------------------------
 window.startExperience = startExperience;
 window.openShareModal = openShareModal;
