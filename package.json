@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@arcware-cloud/pixelstreaming-websdk": "^1.3.12",
+    "nodemailer": "^7.0.11",
     "streampixelsdk": "github:infinity-void-metaverse/Streampixel-Web-SDK"
   },
   "devDependencies": {
