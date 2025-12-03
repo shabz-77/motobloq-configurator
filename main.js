@@ -1,18 +1,23 @@
-// main.js
 import { StreamingProvider } from "./providers/streaming-provider.js";
 
-/**
- * Make closeLoading available for the inline onclick in index.html
- * We attach this BEFORE any async/await so it's ready immediately.
- */
+/* ---------------------------------------------------------
+   CLOSE LOADING SCREEN + TRACK "start_experience" EVENT
+   --------------------------------------------------------- */
 window.closeLoading = () => {
   const loader = document.getElementById("loading-screen");
   if (loader) loader.style.display = "none";
+
+  // Google Analytics custom event
+  if (window.gtag) {
+    window.gtag("event", "start_experience", {
+      event_category: "engagement"
+    });
+  }
 };
 
-// -------------------------
-// UI helpers (toast + modal)
-// -------------------------
+/* ---------------------------------------------------------
+   UI FUNCTIONS: TOAST, OPEN/CLOSE SHARE MODAL
+   --------------------------------------------------------- */
 function showToast(msg) {
   const t = document.getElementById("toast");
   if (!t) return;
@@ -31,66 +36,64 @@ window.closeShareModal = () => {
   if (el) el.style.display = "none";
 };
 
-// -------------------------
-// MAIN APP LOGIC
-// -------------------------
-
-// Provider (Streampixel by default)
+/* ---------------------------------------------------------
+   INITIALIZE STREAMING PROVIDER (Streampixel WebSDK)
+   --------------------------------------------------------- */
 const provider = await StreamingProvider.init("streampixel");
 
-// CONFIG STATE
+/* ---------------------------------------------------------
+   CONFIG STATE (Stores user's variant selections)
+   --------------------------------------------------------- */
 let configState = JSON.parse(localStorage.getItem("userSpec") || "{}");
 
-// If there are NO query params, reset saved config to avoid stale state
+// If URL has no parameters, clear old saved config
 if (window.location.search.length <= 1) {
   configState = {};
   localStorage.removeItem("userSpec");
 }
 
-// UE → WEB (save VS_ values when user clicks options)
+/* ---------------------------------------------------------
+   UE → JS RESPONSE HANDLER
+   Saves VS_ actions when user selects variants inside UE.
+   --------------------------------------------------------- */
 provider.onResponse((data) => {
   try {
     if (data.action?.startsWith("VS_") && data.value !== "None") {
       configState[data.action] = data.value;
       localStorage.setItem("userSpec", JSON.stringify(configState));
-      console.log("✅ Saved from UE:", data.action, "=", data.value);
+      console.log("Saved from UE:", data.action, "=", data.value);
     }
   } catch (err) {
-    console.warn("Failed to handle response:", err);
+    console.warn("Failed to process UE response:", err);
   }
 });
 
-// Parse URL config immediately
+/* ---------------------------------------------------------
+   READ URL PARAMETERS → APPLY TO CONFIGSTATE
+   --------------------------------------------------------- */
 const params = new URLSearchParams(window.location.search);
 const loadedConfig = {};
 params.forEach((v, k) => (loadedConfig[k] = v));
 
 if (Object.keys(loadedConfig).length > 0) {
-  console.log("✅ Found config in URL:", loadedConfig);
   configState = { ...loadedConfig };
   localStorage.setItem("userSpec", JSON.stringify(configState));
-} else {
-  console.info("ℹ️ No URL config to apply");
 }
 
-// When stream is ready, hide loader & apply URL config (if any)
+/* ---------------------------------------------------------
+   STREAM READY: APPLY URL CONFIG TO UNREAL
+   --------------------------------------------------------- */
 provider.onReady(() => {
-  console.log("🟢 Stream Ready!");
-
-  // Hide loading screen (if still visible)
   const loader = document.getElementById("loading-screen");
   if (loader) loader.style.display = "none";
 
-  // Apply URL config to Unreal if present
+  // Apply URL config with short delays to avoid overload
   if (Object.keys(loadedConfig).length > 0) {
-    console.log("✅ Applying URL config to UE...");
-
     let delay = 0;
-    const delayStep = 300; // small spacing between messages
+    const delayStep = 300;
 
     Object.entries(loadedConfig).forEach(([action, value]) => {
       setTimeout(() => {
-        console.log(`📤 Sending from URL: ${action} = ${value}`);
         provider.send(action, value);
       }, delay);
       delay += delayStep;
@@ -98,38 +101,44 @@ provider.onReady(() => {
   }
 });
 
-// -------------------------
-// SHARE LINK + EMAIL
-// -------------------------
-
-// COPY LINK + silent email to Motobloq
+/* ---------------------------------------------------------
+   SHARE LINK BUTTON
+   - Copies URL
+   - Fires GA event
+   - Sends silent serverless email
+   --------------------------------------------------------- */
 window.copyShareLink = () => {
   const urlParams = new URLSearchParams(configState);
   const url = `${window.location.origin}${window.location.pathname}?${urlParams.toString()}`;
 
   navigator.clipboard.writeText(url).then(() => showToast("Link copied!"));
 
-  // Call serverless function for silent event
+  // Google Analytics event
+  if (window.gtag) {
+    window.gtag("event", "share_link", {
+      event_category: "engagement",
+      method: "copy_link"
+    });
+  }
+
+  // Serverless silent log email
   fetch("/api/send-config", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       silent: true,
-      configUrl: url,
-    }),
-  })
-    .then((res) => {
-      if (!res.ok) {
-        console.error("Silent send failed:", res.status);
-      }
+      configUrl: url
     })
-    .catch((err) => {
-      console.error("Silent send error:", err);
-    });
+  }).catch((err) => {
+    console.error("Silent send error:", err);
+  });
 };
 
-
-// Send config + user info to Motobloq
+/* ---------------------------------------------------------
+   SEND SHARE EMAIL BUTTON
+   - Sends email to Motobloq via serverless function
+   - Fires GA event on success
+   --------------------------------------------------------- */
 window.sendShareEmail = () => {
   const nameEl = document.getElementById("share_name");
   const emailEl = document.getElementById("share_email");
@@ -155,22 +164,28 @@ window.sendShareEmail = () => {
       name,
       email,
       message,
-      configUrl: url,
-    }),
+      configUrl: url
+    })
   })
     .then(async (res) => {
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        console.error("SendShareEmail failed:", res.status, data);
-        alert("Error sending email. Please try again.");
+        alert("Error sending email.");
         return;
+      }
+
+      // Google Analytics event for successful email
+      if (window.gtag) {
+        window.gtag("event", "send_email", {
+          event_category: "engagement",
+          event_label: "motobloq_email_sent"
+        });
       }
 
       showToast("Email sent!");
       window.closeShareModal();
     })
     .catch((err) => {
-      console.error("SendShareEmail error:", err);
-      alert("Error sending email. Please try again.");
+      console.error("Send email error:", err);
+      alert("Error sending email.");
     });
 };
