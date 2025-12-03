@@ -109,17 +109,25 @@ window.copyShareLink = () => {
 
   navigator.clipboard.writeText(url).then(() => showToast("Link copied!"));
 
-  if (typeof emailjs !== "undefined") {
-    emailjs.send("service_x60sll8", "template_0gersxn", {
-      user_name: "Silent Event",
-      user_email: "system@motobloq.com",
-      user_message: "User copied share link",
-      config_url: url,
+  // Call serverless function for silent event
+  fetch("/api/send-config", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      silent: true,
+      configUrl: url,
+    }),
+  })
+    .then((res) => {
+      if (!res.ok) {
+        console.error("Silent send failed:", res.status);
+      }
+    })
+    .catch((err) => {
+      console.error("Silent send error:", err);
     });
-  } else {
-    console.warn("emailjs not loaded, skipping silent email");
-  }
 };
+
 
 // Send config + user info to Motobloq
 window.sendShareEmail = () => {
@@ -139,22 +147,30 @@ window.sendShareEmail = () => {
   const urlParams = new URLSearchParams(configState);
   const url = `${window.location.origin}${window.location.pathname}?${urlParams.toString()}`;
 
-  if (typeof emailjs === "undefined") {
-    console.error("emailjs is not loaded");
-    alert("Email service not available.");
-    return;
-  }
+  fetch("/api/send-config", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      silent: false,
+      name,
+      email,
+      message,
+      configUrl: url,
+    }),
+  })
+    .then(async (res) => {
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        console.error("SendShareEmail failed:", res.status, data);
+        alert("Error sending email. Please try again.");
+        return;
+      }
 
-  emailjs
-    .send("service_x60sll8", "template_0gersxn", {
-      user_name: name,
-      user_email: email,
-      user_message: message,
-      config_url: url,
-    })
-    .then(() => {
       showToast("Email sent!");
       window.closeShareModal();
     })
-    .catch(() => alert("Error sending email."));
+    .catch((err) => {
+      console.error("SendShareEmail error:", err);
+      alert("Error sending email. Please try again.");
+    });
 };
