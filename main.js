@@ -1,22 +1,7 @@
 import { StreamingProvider } from "./providers/streaming-provider.js";
 
 /* ---------------------------------------------------------
-   CLOSE LOADING SCREEN + TRACK "start_experience" EVENT
-   --------------------------------------------------------- */
-window.closeLoading = () => {
-  const loader = document.getElementById("loading-screen");
-  if (loader) loader.style.display = "none";
-
-  // Google Analytics custom event
-  if (window.gtag) {
-    window.gtag("event", "start_experience", {
-      event_category: "engagement"
-    });
-  }
-};
-
-/* ---------------------------------------------------------
-   UI FUNCTIONS: TOAST, OPEN/CLOSE SHARE MODAL
+   UI HELPERS: OVERLAYS + TOAST + SHARE MODAL
    --------------------------------------------------------- */
 function showToast(msg) {
   const t = document.getElementById("toast");
@@ -24,6 +9,50 @@ function showToast(msg) {
   t.innerText = msg;
   t.style.display = "block";
   setTimeout(() => (t.style.display = "none"), 2000);
+}
+
+function showStartScreen() {
+  const start = document.getElementById("start-screen");
+  if (start) start.style.display = "flex";
+}
+
+function hideStartScreen() {
+  const start = document.getElementById("start-screen");
+  if (start) start.style.display = "none";
+}
+
+function showConnectOverlay(message = "Connecting to Motoverse server…") {
+  const overlay = document.getElementById("connect-overlay");
+  const msg = document.getElementById("connect-message");
+  const q = document.getElementById("queue-message");
+  if (msg) msg.innerText = message;
+  if (q) {
+    q.style.display = "none";
+    q.innerText = "";
+  }
+  if (overlay) {
+    overlay.style.opacity = "1";
+    overlay.style.display = "flex";
+  }
+}
+
+function hideConnectOverlay() {
+  const overlay = document.getElementById("connect-overlay");
+  if (!overlay) return;
+
+  overlay.style.opacity = "0";
+  setTimeout(() => {
+    overlay.style.display = "none";
+    overlay.style.opacity = "1";
+  }, 600);
+}
+
+function setQueueText(text) {
+  const q = document.getElementById("queue-message");
+  if (!q) return;
+
+  q.innerText = text;
+  q.style.display = text ? "block" : "none";
 }
 
 window.openShareModal = () => {
@@ -37,11 +66,6 @@ window.closeShareModal = () => {
 };
 
 /* ---------------------------------------------------------
-   INITIALIZE STREAMING PROVIDER (Streampixel WebSDK)
-   --------------------------------------------------------- */
-const provider = await StreamingProvider.init("streampixel");
-
-/* ---------------------------------------------------------
    CONFIG STATE (Stores user's variant selections)
    --------------------------------------------------------- */
 let configState = JSON.parse(localStorage.getItem("userSpec") || "{}");
@@ -53,23 +77,7 @@ if (window.location.search.length <= 1) {
 }
 
 /* ---------------------------------------------------------
-   UE → JS RESPONSE HANDLER
-   Saves VS_ actions when user selects variants inside UE.
-   --------------------------------------------------------- */
-provider.onResponse((data) => {
-  try {
-    if (data.action?.startsWith("VS_") && data.value !== "None") {
-      configState[data.action] = data.value;
-      localStorage.setItem("userSpec", JSON.stringify(configState));
-      console.log("Saved from UE:", data.action, "=", data.value);
-    }
-  } catch (err) {
-    console.warn("Failed to process UE response:", err);
-  }
-});
-
-/* ---------------------------------------------------------
-   READ URL PARAMETERS → APPLY TO CONFIGSTATE
+   URL PARAMETERS → APPLY TO CONFIGSTATE
    --------------------------------------------------------- */
 const params = new URLSearchParams(window.location.search);
 const loadedConfig = {};
@@ -81,25 +89,117 @@ if (Object.keys(loadedConfig).length > 0) {
 }
 
 /* ---------------------------------------------------------
-   STREAM READY: APPLY URL CONFIG TO UNREAL
+   STREAM INIT (DELAYED UNTIL USER CLICKS START)
    --------------------------------------------------------- */
-provider.onReady(() => {
-  const loader = document.getElementById("loading-screen");
-  if (loader) loader.style.display = "none";
+let provider = null;
+let providerReady = false;
 
-  // Apply URL config with short delays to avoid overload
-  if (Object.keys(loadedConfig).length > 0) {
-    let delay = 0;
-    const delayStep = 300;
+async function startExperience() {
+  // 1) Hide the manual start screen
+  hideStartScreen();
 
-    Object.entries(loadedConfig).forEach(([action, value]) => {
-      setTimeout(() => {
-        provider.send(action, value);
-      }, delay);
-      delay += delayStep;
+  // 2) Show the “connecting” overlay (masks StreamPixel status text)
+  showConnectOverlay("Connecting to Motoverse server…");
+
+  // 3) Google Analytics event
+  if (window.gtag) {
+    window.gtag("event", "start_experience", {
+      event_category: "engagement",
     });
   }
-});
+
+  // 4) Init streaming provider (Streampixel WebSDK)
+  provider = await StreamingProvider.init("streampixel");
+
+  // 5) UE → JS RESPONSE HANDLER
+  provider.onResponse((data) => {
+    try {
+      if (data.action?.startsWith("VS_") && data.value !== "None") {
+        configState[data.action] = data.value;
+        localStorage.setItem("userSpec", JSON.stringify(configState));
+        console.log("Saved from UE:", data.action, "=", data.value);
+      }
+    } catch (err) {
+      console.warn("Failed to process UE response:", err);
+    }
+  });
+
+  // 6) Stream Ready (video initialized inside provider)
+  provider.onReady(() => {
+    providerReady = true;
+
+    // Hide the connecting overlay once Streampixel says video is initialized
+    hideConnectOverlay();
+
+    // Apply URL config with short delays to avoid overload
+    if (Object.keys(loadedConfig).length > 0) {
+      let delay = 0;
+      const delayStep = 300;
+
+      Object.entries(loadedConfig).forEach(([action, value]) => {
+        setTimeout(() => {
+          provider.send(action, value);
+        }, delay);
+        delay += delayStep;
+      });
+    }
+  });
+
+  // 7) Optional: handle disconnect (show overlay again)
+  // Your provider returns appStream under provider.application (see streampixel.js)
+  if (provider?.application) {
+    // appStream.onDisconnect is mentioned by StreamPixel team
+    provider.application.onDisconnect = () => {
+      providerReady = false;
+      showConnectOverlay("Disconnected. Reconnecting to Motoverse server…");
+      setQueueText(""); // clear queue text
+    };
+
+    // Optional: queue handler hook (if available in SDK)
+    // Not all SDK builds expose the same API. We safely check for it.
+    try {
+      const qh = provider.application?.queueHandler;
+      if (qh) {
+        // Some SDKs expose callbacks/events; we support a few common patterns safely.
+        if (typeof qh.onPositionChanged === "function") {
+          qh.onPositionChanged((pos) => {
+            setQueueText(`Queue position: ${pos}`);
+          });
+        } else if (typeof qh.onQueuePosition === "function") {
+          qh.onQueuePosition((pos) => {
+            setQueueText(`Queue position: ${pos}`);
+          });
+        }
+      }
+    } catch (e) {
+      // silent: queue UI is optional
+    }
+  }
+}
+
+/* ---------------------------------------------------------
+   Wire Start button
+   --------------------------------------------------------- */
+function wireStartButton() {
+  const btn = document.getElementById("startBtn");
+  if (!btn) return;
+
+  btn.addEventListener("click", async () => {
+    try {
+      await startExperience();
+    } catch (err) {
+      console.error("Failed to start experience:", err);
+      showConnectOverlay("Unable to connect. Please try again.");
+      setQueueText("");
+      // Optionally bring back start screen
+      showStartScreen();
+    }
+  });
+}
+
+// Show start screen on load, and wire the button.
+showStartScreen();
+wireStartButton();
 
 /* ---------------------------------------------------------
    SHARE LINK BUTTON
@@ -113,22 +213,20 @@ window.copyShareLink = () => {
 
   navigator.clipboard.writeText(url).then(() => showToast("Link copied!"));
 
-  // Google Analytics event
   if (window.gtag) {
     window.gtag("event", "share_link", {
       event_category: "engagement",
-      method: "copy_link"
+      method: "copy_link",
     });
   }
 
-  // Serverless silent log email
   fetch("/api/send-config", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       silent: true,
-      configUrl: url
-    })
+      configUrl: url,
+    }),
   }).catch((err) => {
     console.error("Silent send error:", err);
   });
@@ -164,8 +262,8 @@ window.sendShareEmail = () => {
       name,
       email,
       message,
-      configUrl: url
-    })
+      configUrl: url,
+    }),
   })
     .then(async (res) => {
       if (!res.ok) {
@@ -173,11 +271,10 @@ window.sendShareEmail = () => {
         return;
       }
 
-      // Google Analytics event for successful email
       if (window.gtag) {
         window.gtag("event", "send_email", {
           event_category: "engagement",
-          event_label: "motobloq_email_sent"
+          event_label: "motobloq_email_sent",
         });
       }
 

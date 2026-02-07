@@ -36,7 +36,7 @@
   #stream-container video {
     width: 100%;
     height: 100%;
-    object-fit: contain; /* revert to contain */
+    object-fit: contain;
     display: block;
   }
 
@@ -73,31 +73,39 @@
   }
 
   /* --------------------------- */
-  /* LOADING SCREEN (FIXED)      */
+  /* START SCREEN (CLICK GATE)   */
   /* --------------------------- */
-  #loading-screen {
+  #start-screen {
     position: fixed;
-    top: 0; left: 0;
-    width: 100%;
-    height: 100%;
+    inset: 0;
     background: black;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    z-index: 9999;
+    z-index: 99999;
+    padding: 24px;
+    text-align: center;
   }
 
-  #loading-screen img {
+  #start-screen img {
     width: 70%;
     max-width: 900px;
     height: auto;
     display: block;
-    margin-bottom: 20px;
+    margin-bottom: 18px;
     object-fit: contain;
   }
 
-  #loading-screen button {
+  #start-screen .hint {
+    color: rgba(255,255,255,0.75);
+    font-size: 14px;
+    line-height: 1.5;
+    max-width: 520px;
+    margin: 0 0 18px 0;
+  }
+
+  #start-screen button {
     padding: 10px 20px;
     font-size: 14px;
     border-radius: 6px;
@@ -107,8 +115,62 @@
     cursor: pointer;
   }
 
-  #loading-screen button:hover {
+  #start-screen button:hover {
     background: rgba(255, 255, 255, 0.15);
+  }
+
+  /* --------------------------- */
+  /* CONNECTING OVERLAY (AUTO)   */
+  /* --------------------------- */
+  #connect-overlay {
+    position: fixed;
+    inset: 0;
+    background: black;
+    display: none; /* shown after user clicks Start */
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    z-index: 99998;
+    transition: opacity 0.6s ease;
+    padding: 24px;
+    text-align: center;
+  }
+
+  #connect-overlay img {
+    width: 220px;
+    height: auto;
+    opacity: 0.95;
+  }
+
+  #connect-message {
+    color: #cfcfcf;
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.85;
+    margin: 0;
+  }
+
+  #queue-message {
+    color: rgba(255,255,255,0.65);
+    font-size: 13px;
+    margin: 0;
+    display: none;
+  }
+
+  /* CSS Spinner */
+  .spinner {
+    width: 34px;
+    height: 34px;
+    border: 3px solid rgba(255,255,255,0.18);
+    border-top-color: rgba(255,255,255,0.85);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 
   /* SHARE MODAL */
@@ -135,7 +197,6 @@
   gtag('config', 'G-NSL2J9KFP1');
 </script>
 
-
 <!-- VERCEL ANALYTICS -->
 <script>
   window.va = window.va || function () {
@@ -149,11 +210,23 @@
 <body>
 
 <!-- ------------------------- -->
-<!-- FIXED LOADING SCREEN      -->
+<!-- START SCREEN (CLICK)      -->
 <!-- ------------------------- -->
-<div id="loading-screen">
+<div id="start-screen">
+  <!-- Keep your existing image if you want -->
   <img src="loading-screen.png" alt="Loading" />
-  <button onclick="closeLoading()">Enter Experience</button>
+  <p class="hint">For best experience, view on desktop.</p>
+  <button id="startBtn" type="button">Start Experience</button>
+</div>
+
+<!-- ------------------------- -->
+<!-- CONNECTING OVERLAY (AUTO) -->
+<!-- ------------------------- -->
+<div id="connect-overlay">
+  <img src="/logo.png" alt="Motoverse" />
+  <p id="connect-message">Connecting to Motoverse server…</p>
+  <div class="spinner" aria-label="Loading"></div>
+  <p id="queue-message"></p>
 </div>
 
 <!-- VIDEO STREAM CONTAINER -->
